@@ -1151,6 +1151,27 @@ export function skyCube() {
   return tex;
 }
 
+/**
+ * Мягкое пятно под объектом. Настоящая тень от солнца уходит вбок и
+ * при низком солнце пропадает совсем, из-за чего машины и люди начинают
+ * «висеть» над асфальтом — это пятно держит их на земле всегда.
+ */
+export function blobShadow() {
+  if (cache.has('blob')) return cache.get('blob');
+  const S = 128;
+  const c = canvas(S, S);
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(S / 2, S / 2, 2, S / 2, S / 2, S / 2);
+  g.addColorStop(0, 'rgba(0,0,0,0.85)');
+  g.addColorStop(0.55, 'rgba(0,0,0,0.35)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, S, S);
+  const tex = new THREE.CanvasTexture(c);
+  cache.set('blob', tex);
+  return tex;
+}
+
 /** Циферблат башни: римские деления и стрелки. */
 export function clockFace() {
   if (cache.has('clock')) return cache.get('clock');

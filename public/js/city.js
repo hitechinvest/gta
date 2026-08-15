@@ -36,6 +36,26 @@ function facadeTexture(b) {
   }
 }
 
+/**
+ * Запекает затенение в цвета вершин: нижние метры стены темнее.
+ * В San Andreas свет был запечён в геометрию, и именно это «сажало»
+ * дома на землю — динамическая тень такого не даёт.
+ */
+function bakeGroundAO(geo, fadeHeight = 4, floor = 0.52) {
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const k = Math.min(1, Math.max(0, y / fadeHeight));
+    const shade = floor + (1 - floor) * (k * k * (3 - 2 * k)); // сглаженная ступенька
+    colors[i * 3] = shade;
+    colors[i * 3 + 1] = shade;
+    colors[i * 3 + 2] = shade;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geo;
+}
+
 /** Ступенчатый фламандский фронтон: коробки лесенкой над фасадом. */
 function stepGable(b, geos) {
   const steps = b.gableSteps || 4;
@@ -50,12 +70,12 @@ function stepGable(b, geos) {
     if (w < 1.2) break;
     const g = new THREE.BoxGeometry(alongX ? w : depth, stepH, alongX ? depth : w);
     g.translate(b.x, b.h + stepH / 2 + i * stepH, b.z);
-    geos.push(g);
+    geos.push(bakeGroundAO(g, 0.001));
   }
   // Конёк с флюгером.
   const cap = new THREE.BoxGeometry(1.1, 1.6, 1.1);
   cap.translate(b.x, b.h + steps * stepH + 1.5, b.z);
-  geos.push(cap);
+  geos.push(bakeGroundAO(cap, 0.001));
 }
 
 /**
@@ -191,7 +211,7 @@ function castleTowers(b) {
 }
 
 /** Зубцы «ласточкин хвост» поверх кремлёвской стены. */
-function crenellations(b, geos) {
+function crenellations(b, geos, bake = true) {
   const alongX = b.w > b.d;
   const len = alongX ? b.w : b.d;
   const count = Math.max(2, Math.floor(len / 3));
@@ -208,7 +228,7 @@ function crenellations(b, geos) {
       b.h + 0.85,
       b.z + (alongX ? 0 : offset),
     );
-    geos.push(g);
+    geos.push(bake ? bakeGroundAO(g, 0.001) : g);
   }
 }
 
@@ -332,9 +352,10 @@ export function buildCity(scene, world, quality = 'high') {
           normalScale: new THREE.Vector2(0.9, 0.9),
           roughness: 0.92,
           metalness: 0.02,
+          vertexColors: true,
         });
       } else {
-        material = new THREE.MeshLambertMaterial(params);
+        material = new THREE.MeshLambertMaterial({ ...params, vertexColors: true });
       }
       byMaterial.set(key, { material, geos: [] });
     }
@@ -342,7 +363,10 @@ export function buildCity(scene, world, quality = 'high') {
     const base = b.y0 || 0;
     const height = b.h - base;
     const geo = facadeBox(b.w, height, b.d, tile[0], tile[1]);
-    geo.translate(b.x, base + height / 2, b.z);
+    // AO считаем в локальных координатах, до переноса на место.
+    geo.translate(0, height / 2, 0);
+    bakeGroundAO(geo, base > 0 ? 0.001 : 4.5);
+    geo.translate(b.x, base, b.z);
     const bucket = byMaterial.get(key);
     bucket.geos.push(geo);
 
@@ -434,7 +458,7 @@ export function buildCity(scene, world, quality = 'high') {
       pin.position.set(b.x, b.h + f.spire + f.spire * 0.16, b.z);
       group.add(pin);
     }
-    if (f.crenels) crenellations(b, concreteGeos);
+    if (f.crenels) crenellations(b, concreteGeos, false);
     if (f.glassRoof) {
       const cap = new THREE.Mesh(
         new THREE.SphereGeometry(Math.min(b.w, b.d) * 0.46, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),

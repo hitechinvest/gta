@@ -3,10 +3,25 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { VEHICLES } from '/shared/protocol.js';
-import { signTexture, foliageTexture, faceTexture, clothTexture, skyCube } from './textures.js';
+import { signTexture, foliageTexture, faceTexture, clothTexture, skyCube, blobShadow } from './textures.js';
 import { assets } from './assets.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+
+/** Контактное пятно под объектом: всегда прижимает его к земле. */
+function contactShadow(width, depth, opacity = 0.5) {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshBasicMaterial({
+      map: blobShadow(), transparent: true, opacity,
+      depthWrite: false, toneMapped: false,
+    }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = 0.03;
+  mesh.renderOrder = -1;
+  return mesh;
+}
 const mat = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
 
 // --- персонажи --------------------------------------------------------------
@@ -164,6 +179,8 @@ export function createCharacter(skinIndex = 0) {
 
     return { hip, knee };
   }
+
+  root.add(contactShadow(1.1, 1.1, 0.45));
 
   const armL = makeArm(-1);
   const armR = makeArm(1);
@@ -586,6 +603,8 @@ export function createVehicle(type = 'zhiguli', color = 0xc9d3d9) {
     dpsSign2.rotation.y = -Math.PI / 2;
     root.add(dpsSign2);
   }
+
+  root.add(contactShadow(w * 2.1, l * 1.35, 0.55));
 
   root.userData = { type, def, wheels, siren, heads, tails, headM, tailM, beams, spin: 0, steer: 0 };
 
