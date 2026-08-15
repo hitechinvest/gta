@@ -32,6 +32,32 @@ npm start
 Смена `SEED` полностью меняет планировку города — дома, дворы, точки спавна
 машин и бонусов.
 
+## Развёртывание на сервере (Ubuntu + nginx)
+
+На сервере с nginx игра ставится одним скриптом: он поднимает systemd-сервис,
+пишет vhost с проксированием WebSocket и выпускает сертификат Let's Encrypt.
+
+```bash
+sudo -i
+git clone -b claude/3d-browser-minigame-9b0qly \
+    https://github.com/hitechinvest/gta.git /opt/rayony
+cd /opt/rayony
+bash deploy/install.sh myonlinegame.gdesite.ru 3210
+```
+
+Первый аргумент — домен (нужна A-запись или wildcard на IP сервера), второй —
+внутренний порт Node (наружу не выставляется, nginx проксирует на него
+`127.0.0.1`). Скрипт идемпотентен: повторный запуск обновляет сервис и конфиг.
+
+Обновление после новых коммитов:
+
+```bash
+cd /opt/rayony && git pull && npm ci --omit=dev && systemctl restart rayony
+```
+
+Полезное: `systemctl status rayony`, `journalctl -u rayony -f`,
+`curl -s https://myonlinegame.gdesite.ru/api/status`.
+
 ## Управление
 
 | Действие | Клавиши |

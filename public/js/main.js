@@ -935,6 +935,9 @@ function updatePickups(dt) {
     if (!game.player.dead && !game.player.vehicle) {
       if (Math.hypot(p.x - game.player.x, p.z - game.player.z) < 1.6) {
         p.takenUntil = now + 3000; // ждём подтверждения сервера
+        // Сначала свежая позиция, иначе сервер проверит дистанцию по старой.
+        game.lastSend = 0;
+        sendState();
         game.net.send({ t: 'pickup', i: p.id });
       }
     }
