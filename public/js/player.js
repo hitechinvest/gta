@@ -128,8 +128,11 @@ export class LocalPlayer {
     // Направление относительно камеры.
     const sin = Math.sin(this.camYaw);
     const cos = Math.cos(this.camYaw);
-    const wishX = mv.x * cos - mv.y * sin;
-    const wishZ = -mv.x * sin - mv.y * cos;
+    // Камера смотрит вдоль (sin, cos), вправо от неё — (-cos, sin).
+    // Раньше обе оси были взяты с обратным знаком, и на «вперёд»
+    // персонаж уходил ровно назад, к камере.
+    const wishX = mv.y * sin - mv.x * cos;
+    const wishZ = mv.y * cos + mv.x * sin;
     const wishLen = Math.hypot(wishX, wishZ);
 
     const accel = this.onGround ? 26 : 8;
