@@ -1107,6 +1107,50 @@ export function clothTexture(baseColor = 0x2a2320, kind = 'jacket') {
   return tex;
 }
 
+/**
+ * Кубическая карта окружения для отражений в кузове: небо сверху,
+ * асфальт снизу, полоса горизонта по бокам. Шести canvas-граней хватает —
+ * в кузове читается небо и линия горизонта, а это и создаёт «мокрый» лак.
+ */
+export function skyCube() {
+  if (cache.has('skycube')) return cache.get('skycube');
+  const S = 64;
+
+  const face = (draw) => {
+    const c = canvas(S, S);
+    draw(c.getContext('2d'), S);
+    return c;
+  };
+
+  const side = face((ctx, s) => {
+    const g = ctx.createLinearGradient(0, 0, 0, s);
+    g.addColorStop(0, '#8fb4d8');
+    g.addColorStop(0.48, '#cfdae4');
+    g.addColorStop(0.52, '#8e8b82');
+    g.addColorStop(1, '#5d5c57');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, s, s);
+  });
+  const top = face((ctx, s) => {
+    const g = ctx.createRadialGradient(s / 2, s / 2, 2, s / 2, s / 2, s / 1.4);
+    g.addColorStop(0, '#a9c9e8');
+    g.addColorStop(1, '#6f9ccb');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, s, s);
+  });
+  const bottom = face((ctx, s) => {
+    ctx.fillStyle = '#4a4945';
+    ctx.fillRect(0, 0, s, s);
+  });
+
+  // Порядок граней: +X, -X, +Y, -Y, +Z, -Z.
+  const tex = new THREE.CubeTexture([side, side, top, bottom, side, side]);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  cache.set('skycube', tex);
+  return tex;
+}
+
 /** Циферблат башни: римские деления и стрелки. */
 export function clockFace() {
   if (cache.has('clock')) return cache.get('clock');

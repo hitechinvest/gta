@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { VEHICLES } from '/shared/protocol.js';
-import { signTexture, foliageTexture, faceTexture, clothTexture } from './textures.js';
+import { signTexture, foliageTexture, faceTexture, clothTexture, skyCube } from './textures.js';
 import { assets } from './assets.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
@@ -361,10 +361,18 @@ export function createVehicle(type = 'zhiguli', color = 0xc9d3d9) {
   const def = VEHICLES[type] || VEHICLES.zhiguli;
   const [w, h, l] = def.size;
   const root = new THREE.Group();
-  const bodyM = mat(color);
-  const glassM = new THREE.MeshLambertMaterial({ color: 0x2b3a44, transparent: true, opacity: 0.72 });
+  const env = skyCube();
+  const bodyM = new THREE.MeshStandardMaterial({
+    color, metalness: 0.45, roughness: 0.32, envMap: env, envMapIntensity: 0.85,
+  });
+  const glassM = new THREE.MeshStandardMaterial({
+    color: 0x1e2a33, transparent: true, opacity: 0.66,
+    metalness: 0.9, roughness: 0.08, envMap: env, envMapIntensity: 1.3,
+  });
   const darkM = mat(0x1a1c1f);
-  const chromeM = mat(0xb8bfc4);
+  const chromeM = new THREE.MeshStandardMaterial({
+    color: 0xc8ced3, metalness: 0.95, roughness: 0.18, envMap: env, envMapIntensity: 1.2,
+  });
 
   const wheelR = def.body === 'suv' ? 0.36 : def.body === 'truck' || def.body === 'van' ? 0.38 : 0.32;
   const bodyY = wheelR + 0.12;
@@ -405,6 +413,74 @@ export function createVehicle(type = 'zhiguli', color = 0xc9d3d9) {
     cargo.castShadow = true;
     group.add(cargo);
   }
+
+  // Салон: сиденья, торпедо и руль — видны сквозь стёкла.
+  const seatM = mat(0x2a2b2f);
+  const cabinZ = def.body === 'truck' ? l * 0.2 : def.body === 'van' ? l * 0.1 : -l * 0.02;
+  for (const sx of [-w * 0.24, w * 0.24]) {
+    const seat = new THREE.Mesh(box(w * 0.34, bodyH * 0.3, 0.42), seatM);
+    seat.position.set(sx, bodyH * 0.5, cabinZ - 0.15);
+    group.add(seat);
+    const back = new THREE.Mesh(box(w * 0.34, bodyH * 0.42, 0.14), seatM);
+    back.position.set(sx, bodyH * 0.68, cabinZ - 0.36);
+    group.add(back);
+  }
+  const dash = new THREE.Mesh(box(w * 0.9, bodyH * 0.16, 0.3), seatM);
+  dash.position.set(0, bodyH * 0.62, cabinZ + 0.62);
+  group.add(dash);
+  const wheelSteer = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.03, 6, 14), mat(0x17181a));
+  wheelSteer.position.set(-w * 0.24, bodyH * 0.72, cabinZ + 0.44);
+  wheelSteer.rotation.x = -1.1;
+  group.add(wheelSteer);
+
+  // Колёсные арки: тёмная ниша и крыло над колесом.
+  const archM = mat(0x121315);
+  const wxArch = w / 2;
+  const wzArch = l / 2 - (def.body === 'truck' ? 0.95 : 0.75);
+  const wheelRadius = def.body === 'suv' ? 0.36 : def.body === 'truck' || def.body === 'van' ? 0.38 : 0.32;
+  for (const sz of [1, -1]) {
+    for (const sx of [-1, 1]) {
+      const arch = new THREE.Mesh(box(0.1, wheelRadius * 1.15, wheelRadius * 2.1), archM);
+      arch.position.set(sx * (wxArch - 0.3), wheelRadius * 0.62, sz * wzArch);
+      group.add(arch);
+      // Крыло — тонкая скоба над колесом, ловит блик.
+      const fender = new THREE.Mesh(box(0.14, 0.1, wheelRadius * 2.6), bodyM);
+      fender.position.set(sx * (wxArch - 0.02), wheelRadius * 1.45, sz * wzArch);
+      group.add(fender);
+    }
+  }
+
+  // Зеркала на стойках.
+  for (const sx of [-1, 1]) {
+    const stalk = new THREE.Mesh(box(0.12, 0.04, 0.04), darkM);
+    stalk.position.set(sx * (w / 2 + 0.06), bodyH * 0.72, cabinZ + 0.78);
+    group.add(stalk);
+    const mirror = new THREE.Mesh(box(0.05, 0.11, 0.15), chromeM);
+    mirror.position.set(sx * (w / 2 + 0.13), bodyH * 0.72, cabinZ + 0.78);
+    group.add(mirror);
+  }
+
+  // Дверные швы и ручки — без них борт выглядит цельным слитком.
+  const seamM = mat(0x2a2c2e);
+  for (const sx of [-1, 1]) {
+    for (const dz of [cabinZ + 0.75, cabinZ - 0.75]) {
+      const seam = new THREE.Mesh(box(0.02, bodyH * 0.5, 0.03), seamM);
+      seam.position.set(sx * (w / 2 + 0.005), bodyH * 0.45, dz);
+      group.add(seam);
+    }
+    const handle = new THREE.Mesh(box(0.03, 0.05, 0.16), chromeM);
+    handle.position.set(sx * (w / 2 + 0.02), bodyH * 0.52, cabinZ + 0.2);
+    group.add(handle);
+  }
+
+  // Решётка радиатора и выхлоп.
+  const grille = new THREE.Mesh(box(w * 0.52, 0.16, 0.06), darkM);
+  grille.position.set(0, 0.42, l / 2 + 0.01);
+  group.add(grille);
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.18, 6), darkM);
+  exhaust.rotation.x = Math.PI / 2;
+  exhaust.position.set(w * 0.28, 0.14, -l / 2 - 0.06);
+  group.add(exhaust);
 
   // Бамперы и решётка.
   const bumperF = new THREE.Mesh(box(w * 0.98, 0.14, 0.18), chromeM);
