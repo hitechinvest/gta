@@ -28,7 +28,7 @@ say "Проверяем Node.js"
 NEED_NODE=1
 if command -v node >/dev/null 2>&1; then
   MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-  [ "$MAJOR" -ge 18 ] && NEED_NODE=0
+  if [ "$MAJOR" -ge 18 ]; then NEED_NODE=0; fi
 fi
 if [ "$NEED_NODE" -eq 1 ]; then
   say "Ставим Node.js 20 (nodesource)"
@@ -116,6 +116,19 @@ CONF
 }
 
 write_vhost_ssl() {
+  # Синтаксис под nginx 1.24 (как в провижининге платформы): http2 задаётся
+  # в listen, а не отдельной директивой — «http2 on;» есть только с 1.25.
+  # Именно if, а не «test && var=…»: при set -e неудачная проверка в такой
+  # связке роняет весь скрипт.
+  local extra=""
+  if [ -f /etc/letsencrypt/options-ssl-nginx.conf ]; then
+    extra="    include /etc/letsencrypt/options-ssl-nginx.conf;"
+  fi
+  if [ -f /etc/letsencrypt/ssl-dhparams.pem ]; then
+    extra="${extra}
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;"
+  fi
+
   cat > "$VHOST" <<CONF
 server {
     listen 80;
@@ -126,15 +139,13 @@ server {
 }
 
 server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name ${FQDN};
 
     ssl_certificate     ${LE_LIVE}/fullchain.pem;
     ssl_certificate_key ${LE_LIVE}/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+${extra}
 
     # Игра отдаёт статику и держит WebSocket на /ws.
     location / {
@@ -153,6 +164,24 @@ server {
 CONF
 }
 
+# Применяем конфиг громко: молчаливый провал nginx -t однажды уже стоил
+# нам работающего https — блок 443 просто не появлялся, без единого слова.
+apply_nginx() {
+  if nginx -t 2>/tmp/nginx-test.log; then
+    systemctl reload nginx
+    return 0
+  fi
+  echo
+  echo "!!! nginx отверг конфиг ${VHOST}:"
+  cat /tmp/nginx-test.log
+  if [ "${1:-}" = "fallback" ]; then
+    echo "Возвращаем http-версию, чтобы сайт остался доступен."
+    write_vhost_http
+    nginx -t && systemctl reload nginx
+  fi
+  return 1
+}
+
 # map для корректного Upgrade — один раз на весь nginx.
 if [ ! -f /etc/nginx/conf.d/websocket-upgrade.conf ]; then
   cat > /etc/nginx/conf.d/websocket-upgrade.conf <<'MAP'
@@ -169,7 +198,7 @@ else
   write_vhost_http
 fi
 ln -sf "$VHOST" "/etc/nginx/sites-enabled/${FQDN}.conf"
-nginx -t && systemctl reload nginx
+apply_nginx fallback || true
 
 # --- 5. Сертификат ----------------------------------------------------------
 if [ ! -f "${LE_LIVE}/fullchain.pem" ]; then
@@ -189,7 +218,7 @@ if [ ! -f "${LE_LIVE}/fullchain.pem" ]; then
 
   if [ "$CERT_OK" -eq 1 ]; then
     write_vhost_ssl
-    nginx -t && systemctl reload nginx
+    apply_nginx fallback || true
   else
     echo
     echo "!!! Сертификат выпустить не удалось. Сайт работает по http://${FQDN}"
