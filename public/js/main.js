@@ -16,6 +16,8 @@ import { Input } from './input.js';
 import { Net } from './net.js';
 import { sfx } from './audio.js';
 import { SKINS } from './models.js';
+import { Sky } from './sky.js';
+import { PostFX } from './postfx.js';
 
 const DAY_LENGTH = 600; // секунд на полный цикл суток
 
@@ -124,8 +126,9 @@ async function start(name, skin) {
   game.serverOffset = init.serverTime - Date.now();
   game.world = generateWorld(init.seed);
 
+  game.quality = detectQuality();
   setupScene();
-  game.city = buildCity(game.scene, game.world);
+  game.city = buildCity(game.scene, game.world, game.quality);
 
   game.effects = new Effects(game.scene);
   game.peds = new Peds(game.scene, game.world);
@@ -165,28 +168,43 @@ function nextFrame() {
   return new Promise((r) => requestAnimationFrame(() => r()));
 }
 
+/** Качество подбирается автоматически, но игрок может переопределить. */
+function detectQuality() {
+  const saved = localStorage.getItem('gta.quality');
+  if (saved && ['low', 'medium', 'high'].includes(saved)) return saved;
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  const cores = navigator.hardwareConcurrency || 4;
+  if (touch || cores <= 4) return 'medium';
+  return 'high';
+}
+
 function setupScene() {
   const canvas = document.getElementById('game');
+  const q = game.quality;
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: window.devicePixelRatio < 2,
+    antialias: q === 'low' && window.devicePixelRatio < 2,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q === 'high' ? 2 : 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = q === 'low' ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Плёночная кривая: света не выжигаются, ночь не проваливается в чёрное.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.98;
   game.renderer = renderer;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x9fb0c0);
-  scene.fog = new THREE.Fog(0x9fb0c0, 90, 460);
+  scene.fog = new THREE.Fog(0x8fa6bd, 120, 620);
   game.scene = scene;
 
   const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.15, 900);
   camera.position.set(0, 6, 10);
   game.camera = camera;
+
+  game.sky = new Sky(scene, q === 'low' ? 500 : 720);
 
   game.hemi = new THREE.HemisphereLight(0xbcd0e0, 0x51503f, 1.05);
   scene.add(game.hemi);
@@ -194,7 +212,7 @@ function setupScene() {
   game.sun = new THREE.DirectionalLight(0xffe9c4, 1.5);
   game.sun.position.set(60, 90, 40);
   game.sun.castShadow = true;
-  game.sun.shadow.mapSize.set(2048, 2048);
+  game.sun.shadow.mapSize.set(q === 'high' ? 2048 : 1024, q === 'high' ? 2048 : 1024);
   const d = 70;
   game.sun.shadow.camera.left = -d;
   game.sun.shadow.camera.right = d;
@@ -206,10 +224,13 @@ function setupScene() {
   scene.add(game.sun);
   scene.add(game.sun.target);
 
+  game.postfx = new PostFX(renderer, scene, camera, q);
+
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    game.postfx?.setSize(window.innerWidth, window.innerHeight);
   });
 }
 
@@ -766,7 +787,7 @@ function renderLoop() {
   requestAnimationFrame(renderLoop);
   const dt = Math.min(0.05, game.clock.getDelta());
   update(dt);
-  game.renderer.render(game.scene, game.camera);
+  game.postfx.render();
 }
 
 function update(dt) {
@@ -1035,7 +1056,7 @@ function isNight() {
   return t < 0.22 || t > 0.78;
 }
 
-const DAY_SKY = new THREE.Color(0x9fb0c0);
+const DAY_SKY = new THREE.Color(0x8fa6bd);
 const EVENING_SKY = new THREE.Color(0xd9a86a);
 const NIGHT_SKY = new THREE.Color(0x141a28);
 const tmpColor = new THREE.Color();
@@ -1059,14 +1080,18 @@ function updateDayNight() {
   const eveningness = THREE.MathUtils.clamp(1 - Math.abs(elevation) * 3.2, 0, 1);
 
   tmpColor.copy(NIGHT_SKY).lerp(DAY_SKY, dayness).lerp(EVENING_SKY, eveningness * 0.55);
-  game.scene.background = tmpColor.clone();
   game.scene.fog.color.copy(tmpColor);
-  game.scene.fog.near = 70 + dayness * 40;
-  game.scene.fog.far = 260 + dayness * 220;
 
-  game.sun.intensity = 0.15 + dayness * 1.5;
+  // Небесный купол и сила свечения.
+  const sunDir = new THREE.Vector3(azimuth, Math.max(-0.25, elevation), 0.45).normalize();
+  game.sky?.update(dayness, sunDir, game.time, p);
+  game.postfx?.setNight(dayness);
+  game.scene.fog.near = 110 + dayness * 60;
+  game.scene.fog.far = 380 + dayness * 320;
+
+  game.sun.intensity = 0.12 + dayness * 2.1;
   game.sun.color.setHSL(0.09, 0.45, 0.55 + dayness * 0.35);
-  game.hemi.intensity = 0.25 + dayness * 0.85;
+  game.hemi.intensity = 0.22 + dayness * 0.7;
 
   if (game.city) game.city.setNight(dayness < 0.35);
 }

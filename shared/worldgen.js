@@ -24,6 +24,11 @@ export function mulberry32(seed) {
   };
 }
 
+// Йошкар-Ола: краснокирпичная «набережная Брюгге» с фламандскими фронтонами
+// и кремлёвские стены. Цвета — кирпич разных обжигов и светлая штукатурка.
+const FLEMISH_COLORS = [0xa8443a, 0x8f3b33, 0xb85a45, 0x9c4a3c, 0xc06a4e, 0x7e3a34, 0xb0503c, 0xcf7a52];
+const ROOF_TILE_COLORS = [0x5a4038, 0x6b4a3a, 0x4a3630, 0x7a5240];
+
 // Цвета: выцветшие панели, охра сталинок, силикатный кирпич.
 const PANEL_COLORS = [0xc9c3b4, 0xb9bfc0, 0xd3cbb8, 0xa9b2ae, 0xc4b9a6, 0xbfc7cc];
 const STALINKA_COLORS = [0xd9b26a, 0xc98f5f, 0xd8c39a, 0xbf8b62, 0xd6cba8];
@@ -94,6 +99,63 @@ function buildStalinkaBlock(rng, x0, z0, size, out, props) {
       rot: rng() * Math.PI * 2, scale: 0.9 + rng() * 0.5,
     });
   }
+}
+
+/**
+ * «Набережная Брюгге»: плотный ряд узких домов с фламандскими фронтонами,
+ * плечом к плечу вдоль улицы. Главная примета Йошкар-Олы.
+ */
+function buildFlemishBlock(rng, x0, z0, size, out, props) {
+  const depth = 13;
+  // Каждая сторона квартала — своя улица, дома фасадом наружу.
+  const sides = [
+    { face: 'z-', along: 'x', fixed: z0 + depth / 2 + 1 },
+    { face: 'z+', along: 'x', fixed: z0 + size - depth / 2 - 1 },
+    { face: 'x-', along: 'z', fixed: x0 + depth / 2 + 1 },
+    { face: 'x+', along: 'z', fixed: x0 + size - depth / 2 - 1 },
+  ];
+
+  for (const side of sides) {
+    const alongX = side.along === 'x';
+    const start = (alongX ? x0 : z0) + (alongX ? 0 : depth) + 2;
+    const end = (alongX ? x0 : z0) + size - (alongX ? 0 : depth) - 2;
+    let cursor = start;
+    while (cursor < end - 7) {
+      const width = 7.5 + rng() * 4.5;
+      if (cursor + width > end) break;
+      if (rng() < 0.07) { cursor += width; continue; } // проулок
+      const floors = 3 + Math.floor(rng() * 2);
+      const h = floors * 3.5 + 1.5;
+      const centerAlong = cursor + width / 2;
+      out.push({
+        kind: 'flemish',
+        x: alongX ? centerAlong : side.fixed,
+        z: alongX ? side.fixed : centerAlong,
+        w: alongX ? width - 0.3 : depth,
+        d: alongX ? depth : width - 0.3,
+        h,
+        floors,
+        color: pick(rng, FLEMISH_COLORS),
+        roofColor: pick(rng, ROOF_TILE_COLORS),
+        gable: true,
+        gableSteps: 3 + Math.floor(rng() * 3),
+        face: side.face,
+        sign: rng() < 0.4 ? pick(rng, SHOP_SIGNS) : '',
+      });
+      cursor += width;
+    }
+  }
+
+  // Внутри квартала — двор с деревьями и лавками.
+  for (let t = 0; t < 5; t++) {
+    props.push({
+      type: rng() < 0.5 ? 'birch' : 'poplar',
+      x: x0 + size / 2 + (rng() - 0.5) * (size - depth * 2 - 8),
+      z: z0 + size / 2 + (rng() - 0.5) * (size - depth * 2 - 8),
+      rot: rng() * Math.PI * 2, scale: 0.8 + rng() * 0.5,
+    });
+  }
+  props.push({ type: 'bench', x: x0 + size / 2, z: z0 + size / 2, rot: rng() * Math.PI, scale: 1 });
 }
 
 /** Спальный микрорайон: длинные панельки, двор с площадкой. */
@@ -221,14 +283,49 @@ function buildPrivateBlock(rng, x0, z0, size, out, props) {
   }
 }
 
-/** Центральная площадь: памятник, храм, клумбы. */
+/**
+ * Центральная площадь Йошкар-Олы: Благовещенская башня со шпилем,
+ * краснокирпичная кремлёвская стена с башнями, храм и памятник.
+ */
 function buildSquare(rng, x0, z0, size, out, props) {
   const cx = x0 + size / 2;
   const cz = z0 + size / 2;
-  props.push({ type: 'statue', x: cx, z: cz, rot: Math.PI / 4, scale: 1 });
+  props.push({ type: 'statue', x: cx - 12, z: cz + 10, rot: Math.PI / 4, scale: 1 });
+
+  // Башня с часами и шпилем — доминанта площади.
+  out.push({
+    kind: 'clockTower',
+    x: cx + 6, z: cz - 4,
+    w: 9, d: 9, h: 26, floors: 5,
+    color: 0xe8e2d4, roofColor: 0x2f5d4a, sign: '',
+  });
+
+  // Кремлёвская стена с зубцами вдоль двух сторон квартала.
+  const wallH = 7;
+  const wallT = 2.2;
+  out.push({
+    kind: 'kremlinWall',
+    x: x0 + size / 2, z: z0 + 3,
+    w: size - 14, d: wallT, h: wallH, floors: 1,
+    color: 0x9c4a3c, sign: '',
+  });
+  out.push({
+    kind: 'kremlinWall',
+    x: x0 + 3, z: z0 + size / 2,
+    w: wallT, d: size - 14, h: wallH, floors: 1,
+    color: 0x9c4a3c, sign: '',
+  });
+  for (const [tx, tz] of [[x0 + 3, z0 + 3], [x0 + size - 8, z0 + 3], [x0 + 3, z0 + size - 8]]) {
+    out.push({
+      kind: 'kremlinTower',
+      x: tx, z: tz, w: 6.5, d: 6.5, h: 12, floors: 2,
+      color: 0x9c4a3c, roofColor: 0x3f4a52, sign: '',
+    });
+  }
+
   out.push({
     kind: 'church',
-    x: x0 + size - 16, z: z0 + 14,
+    x: x0 + size - 16, z: z0 + 16,
     w: 16, d: 18, h: 14, floors: 1,
     color: 0xf0eadc, sign: '',
   });
@@ -270,8 +367,8 @@ export function generateWorld(seed = 1337) {
       let kind;
 
       if (ring === 0) kind = 'square';
-      else if (ring === 1) kind = rng() < 0.8 ? 'stalinka' : 'panel';
-      else if (ring === 2) kind = rng() < 0.75 ? 'panel' : 'stalinka';
+      else if (ring === 1) kind = rng() < 0.75 ? 'flemish' : 'stalinka';
+      else if (ring === 2) kind = rng() < 0.6 ? 'panel' : rng() < 0.5 ? 'flemish' : 'stalinka';
       else {
         const r = rng();
         if (r < 0.3) kind = 'factory';
@@ -284,6 +381,7 @@ export function generateWorld(seed = 1337) {
 
       switch (kind) {
         case 'square': buildSquare(rng, x, z, block, buildings, props); break;
+        case 'flemish': buildFlemishBlock(rng, x, z, block, buildings, props); break;
         case 'stalinka': buildStalinkaBlock(rng, x, z, block, buildings, props); break;
         case 'panel': buildPanelBlock(rng, x, z, block, buildings, props); break;
         case 'factory': buildFactoryBlock(rng, x, z, block, buildings, props); break;

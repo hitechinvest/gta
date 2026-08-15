@@ -179,6 +179,120 @@ export function stalinkaFacade(baseColor = 0xd9b26a) {
   return tex;
 }
 
+/**
+ * Фасад «набережной Брюгге»: краснокирпичная кладка, белые наличники,
+ * высокие узкие окна с полуциркульным верхом. Тайл = 1 этаж, 2 окна.
+ */
+export function flemishFacade(baseColor = 0xa8443a) {
+  const key = `flemish-${baseColor}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const W = 256, H = 256;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  const base = new THREE.Color(baseColor);
+  ctx.fillStyle = hex(baseColor);
+  ctx.fillRect(0, 0, W, H);
+
+  // Кирпичная кладка со смещением рядов.
+  const brickH = 9;
+  const brickW = 26;
+  for (let row = 0, y = 0; y < H; row++, y += brickH) {
+    const offset = (row % 2) * (brickW / 2);
+    for (let x = -brickW; x < W + brickW; x += brickW) {
+      const shade = 0.82 + Math.random() * 0.36;
+      const col = base.clone().multiplyScalar(shade);
+      ctx.fillStyle = col.getStyle();
+      ctx.fillRect(x + offset + 1, y + 1, brickW - 2, brickH - 2);
+    }
+  }
+  // Раствор между кирпичами.
+  ctx.strokeStyle = 'rgba(232,226,212,0.35)';
+  ctx.lineWidth = 1;
+  for (let y = 0; y <= H; y += brickH) {
+    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke();
+  }
+
+  // Междуэтажный белый пояс.
+  ctx.fillStyle = 'rgba(245,242,232,0.92)';
+  ctx.fillRect(0, H - 12, W, 8);
+
+  // Два высоких окна с аркой и белым наличником.
+  for (const wx of [W * 0.14, W * 0.58]) {
+    const ww = W * 0.28;
+    const wy = H * 0.16;
+    const wh = H * 0.56;
+    const r = ww / 2;
+
+    ctx.fillStyle = 'rgba(246,243,234,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(wx - 7, wy + wh + 7);
+    ctx.lineTo(wx - 7, wy + r);
+    ctx.arc(wx + ww / 2, wy + r, r + 7, Math.PI, 0);
+    ctx.lineTo(wx + ww + 7, wy + wh + 7);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#2c3a45';
+    ctx.beginPath();
+    ctx.moveTo(wx, wy + wh);
+    ctx.lineTo(wx, wy + r);
+    ctx.arc(wx + ww / 2, wy + r, r, Math.PI, 0);
+    ctx.lineTo(wx + ww, wy + wh);
+    ctx.closePath();
+    ctx.fill();
+
+    // Переплёт.
+    ctx.strokeStyle = 'rgba(245,242,232,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(wx + ww / 2, wy); ctx.lineTo(wx + ww / 2, wy + wh);
+    ctx.moveTo(wx, wy + wh * 0.55); ctx.lineTo(wx + ww, wy + wh * 0.55);
+    ctx.stroke();
+
+    // Блик стекла.
+    ctx.fillStyle = 'rgba(170,200,220,0.22)';
+    ctx.beginPath();
+    ctx.moveTo(wx, wy + wh);
+    ctx.lineTo(wx + ww, wy + r * 0.6);
+    ctx.lineTo(wx + ww, wy + wh * 0.7);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  noise(ctx, W, H, 16);
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
+/** Кладка кремлёвской стены — крупный кирпич, без окон. */
+export function brickWall(baseColor = 0x9c4a3c) {
+  const key = `brick-${baseColor}`;
+  if (cache.has(key)) return cache.get(key);
+  const W = 128, H = 128;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  const base = new THREE.Color(baseColor);
+  ctx.fillStyle = hex(baseColor);
+  ctx.fillRect(0, 0, W, H);
+  const bh = 11;
+  const bw = 30;
+  for (let row = 0, y = 0; y < H; row++, y += bh) {
+    const off = (row % 2) * (bw / 2);
+    for (let x = -bw; x < W + bw; x += bw) {
+      const shade = 0.8 + Math.random() * 0.4;
+      const col = base.clone().multiplyScalar(shade);
+      ctx.fillStyle = col.getStyle();
+      ctx.fillRect(x + off + 1.5, y + 1.5, bw - 3, bh - 3);
+    }
+  }
+  noise(ctx, W, H, 20);
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Заводской корпус: ленточное остекление, ребристые стены. */
 export function factoryFacade(baseColor = 0x9b8f80) {
   const key = `factory-${baseColor}`;
@@ -304,6 +418,10 @@ export function facadeLights(kind) {
       const y0 = f * (H / 2);
       for (let i = 0; i < 3; i++) lit(W * (0.1 + i * 0.3), y0 + H * 0.09, W * 0.16, H * 0.26, 0.45);
     }
+  } else if (kind === 'flemish') {
+    for (const wx of [W * 0.14, W * 0.58]) lit(wx, H * 0.16, W * 0.28, H * 0.56, 0.55);
+  } else if (kind === 'clockTower') {
+    for (const wx of [W * 0.2, W * 0.6]) lit(wx, H * 0.2, W * 0.2, H * 0.3, 0.5);
   } else if (kind === 'factory') {
     for (let x = 0; x < W; x += 32) lit(x + 2, H * 0.24, 28, H * 0.3, 0.3);
   } else if (kind === 'private') {
@@ -323,7 +441,7 @@ export function asphalt(withDashes = true) {
   const W = 256, H = 256;
   const c = canvas(W, H);
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#3b3d40';
+  ctx.fillStyle = '#54575b';
   ctx.fillRect(0, 0, W, H);
   for (let i = 0; i < 900; i++) {
     ctx.fillStyle = `rgba(${100 + Math.random() * 60},${100 + Math.random() * 60},${100 + Math.random() * 60},${Math.random() * 0.14})`;
@@ -343,10 +461,10 @@ export function asphalt(withDashes = true) {
     }
     ctx.stroke();
   }
-  for (let i = 0; i < 4; i++) {
-    ctx.fillStyle = 'rgba(25,26,28,0.45)';
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = 'rgba(40,41,44,0.28)';
     ctx.beginPath();
-    ctx.ellipse(Math.random() * W, Math.random() * H, 10 + Math.random() * 30, 8 + Math.random() * 20, Math.random(), 0, Math.PI * 2);
+    ctx.ellipse(Math.random() * W, Math.random() * H, 4 + Math.random() * 9, 3 + Math.random() * 6, Math.random(), 0, Math.PI * 2);
     ctx.fill();
   }
   if (withDashes) {
@@ -366,7 +484,7 @@ export function sidewalkTex() {
   const W = 128, H = 128;
   const c = canvas(W, H);
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8e8b84';
+  ctx.fillStyle = '#a3a099';
   ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = 'rgba(0,0,0,0.18)';
   ctx.lineWidth = 2;
@@ -457,6 +575,150 @@ export function labelTexture(text, opts = {}) {
   ctx.fillText(text, 256, 64);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * Карта нормалей из готовой canvas-текстуры (оператор Собеля по яркости).
+ * Даёт объём оконным рамам, швам панелей и зерну асфальта без ручных карт.
+ */
+export function normalFromTexture(tex, strength = 1.6) {
+  const src = tex.image;
+  if (!src) return null;
+  const key = `normal-${src.width}x${src.height}-${strength}-${tex.uuid}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const W = src.width;
+  const H = src.height;
+  const read = canvas(W, H).getContext('2d', { willReadFrequently: true });
+  read.drawImage(src, 0, 0);
+  const px = read.getImageData(0, 0, W, H).data;
+
+  const lum = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    lum[i] = (px[i * 4] * 0.299 + px[i * 4 + 1] * 0.587 + px[i * 4 + 2] * 0.114) / 255;
+  }
+  const at = (x, y) => lum[((y + H) % H) * W + ((x + W) % W)];
+
+  const out = canvas(W, H);
+  const ctx = out.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const dx = (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1))
+        - (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1));
+      const dy = (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1))
+        - (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1));
+      const nx = dx * strength;
+      const ny = dy * strength;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      const i = (y * W + x) * 4;
+      img.data[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      img.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      img.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const normal = new THREE.CanvasTexture(out);
+  normal.wrapS = THREE.RepeatWrapping;
+  normal.wrapT = THREE.RepeatWrapping;
+  normal.repeat.copy(tex.repeat);
+  cache.set(key, normal);
+  return normal;
+}
+
+/** Крона для билбордов: полупрозрачные листья кистью. */
+export function foliageTexture(tint = '#4f6b35') {
+  const key = `foliage-${tint}`;
+  if (cache.has(key)) return cache.get(key);
+  const S = 256;
+  const c = canvas(S, S);
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, S, S);
+
+  const base = new THREE.Color(tint);
+  for (let i = 0; i < 420; i++) {
+    // Плотнее к центру — получается силуэт кроны, а не квадрат.
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.pow(Math.random(), 0.6) * S * 0.46;
+    const x = S / 2 + Math.cos(a) * r;
+    const y = S / 2 + Math.sin(a) * r * 0.92;
+    const shade = 0.55 + Math.random() * 0.6;
+    const col = base.clone().multiplyScalar(shade);
+    ctx.globalAlpha = 0.55 + Math.random() * 0.45;
+    ctx.fillStyle = col.getStyle();
+    ctx.beginPath();
+    const rad = 6 + Math.random() * 16;
+    ctx.ellipse(x, y, rad, rad * (0.5 + Math.random() * 0.5), Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // Веточки внутри кроны.
+  ctx.strokeStyle = 'rgba(60,45,30,0.5)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath();
+    ctx.moveTo(S / 2, S * 0.9);
+    ctx.quadraticCurveTo(S / 2 + (Math.random() - 0.5) * 60, S * 0.6, S / 2 + (Math.random() - 0.5) * 150, S * (0.25 + Math.random() * 0.4));
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  cache.set(key, tex);
+  return tex;
+}
+
+/** Циферблат башни: римские деления и стрелки. */
+export function clockFace() {
+  if (cache.has('clock')) return cache.get('clock');
+  const S = 256;
+  const c = canvas(S, S);
+  const ctx = c.getContext('2d');
+  const R = S / 2;
+
+  ctx.fillStyle = '#f4efe2';
+  ctx.beginPath();
+  ctx.arc(R, R, R - 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#2f3a44';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  ctx.strokeStyle = '#2f3a44';
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const long = i % 3 === 0;
+    ctx.lineWidth = long ? 8 : 4;
+    ctx.beginPath();
+    ctx.moveTo(R + Math.cos(a) * (R - 18), R + Math.sin(a) * (R - 18));
+    ctx.lineTo(R + Math.cos(a) * (R - (long ? 42 : 30)), R + Math.sin(a) * (R - (long ? 42 : 30)));
+    ctx.stroke();
+  }
+
+  // Стрелки на «десять часов десять минут» — так циферблат читается лучше.
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(R, R);
+  ctx.lineTo(R + Math.cos(-Math.PI * 0.83) * R * 0.5, R + Math.sin(-Math.PI * 0.83) * R * 0.5);
+  ctx.stroke();
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(R, R);
+  ctx.lineTo(R + Math.cos(-Math.PI * 0.17) * R * 0.7, R + Math.sin(-Math.PI * 0.17) * R * 0.7);
+  ctx.stroke();
+  ctx.fillStyle = '#2f3a44';
+  ctx.beginPath();
+  ctx.arc(R, R, 9, 0, Math.PI * 2);
+  ctx.fill();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  cache.set('clock', tex);
   return tex;
 }
 

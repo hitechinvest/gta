@@ -1,8 +1,9 @@
 // Процедурные модели: персонажи (в российском антураже), автомобили,
 // уличные объекты. Всё собирается из примитивов, без внешних файлов.
 import * as THREE from 'three';
+import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { VEHICLES } from '/shared/protocol.js';
-import { signTexture } from './textures.js';
+import { signTexture, foliageTexture } from './textures.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const mat = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
@@ -188,6 +189,55 @@ function wheelMesh(radius, width) {
   return g;
 }
 
+// Боковые профили кузовов: пары (доля длины от -0.5 до 0.5, доля высоты).
+const CAR_PROFILES = {
+  sedan: [
+    [-0.50, 0.10], [-0.50, 0.46], [-0.34, 0.54], [-0.22, 0.95],
+    [0.04, 1.00], [0.19, 0.58], [0.44, 0.50], [0.50, 0.34], [0.50, 0.10],
+  ],
+  suv: [
+    [-0.50, 0.12], [-0.50, 0.86], [-0.44, 0.98], [0.10, 1.00],
+    [0.24, 0.60], [0.46, 0.54], [0.50, 0.36], [0.50, 0.12],
+  ],
+  van: [
+    [-0.50, 0.10], [-0.50, 0.94], [-0.40, 1.00], [0.34, 1.00],
+    [0.47, 0.66], [0.50, 0.34], [0.50, 0.10],
+  ],
+  truck: [
+    [-0.50, 0.12], [-0.50, 1.00], [0.10, 1.00], [0.10, 0.72],
+    [0.22, 0.70], [0.30, 0.30], [0.50, 0.26], [0.50, 0.12],
+  ],
+};
+
+/** Кузов: боковой профиль, вытянутый по ширине, с фаской по краям. */
+function carBodyGeometry(bodyType, width, height, length) {
+  const profile = CAR_PROFILES[bodyType] || CAR_PROFILES.sedan;
+  const shape = new THREE.Shape();
+  profile.forEach(([pz, py], i) => {
+    const z = pz * length;
+    const y = py * height;
+    if (i === 0) shape.moveTo(z, y);
+    else shape.lineTo(z, y);
+  });
+  shape.closePath();
+
+  const bevel = Math.min(0.12, width * 0.09);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: width - bevel * 2,
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelSegments: 2,
+    curveSegments: 2,
+  });
+  // Профиль строился в плоскости ZY, вытягивание идёт по ширине;
+  // после поворота нос смотрит в +Z, кузов центрируется по X.
+  geo.rotateY(-Math.PI / 2);
+  geo.translate(width / 2 - bevel, 0, 0);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /**
  * Строит машину нужного типа. Возвращает группу с userData.wheels,
  * userData.siren (для ДПС) и методом update(dt, state).
@@ -208,52 +258,37 @@ export function createVehicle(type = 'zhiguli', color = 0xc9d3d9) {
   group.position.y = bodyY;
   root.add(group);
 
-  if (def.body === 'sedan' || def.body === 'suv') {
-    const lower = new THREE.Mesh(box(w, h * 0.42, l), bodyM);
-    lower.position.y = h * 0.21;
-    lower.castShadow = true;
-    group.add(lower);
+  // Кузов — вытянутый боковой профиль с фаской: силуэт читается куда лучше
+  // коробок, а полигонов почти столько же.
+  const bodyH = Math.max(0.7, h - bodyY);
+  const bodyMesh = new THREE.Mesh(carBodyGeometry(def.body, w, bodyH, l), bodyM);
+  bodyMesh.castShadow = true;
+  group.add(bodyMesh);
 
-    const cabinLen = l * 0.46;
-    const cabin = new THREE.Mesh(box(w * 0.92, h * 0.42, cabinLen), bodyM);
-    cabin.position.set(0, h * 0.63, def.body === 'suv' ? -l * 0.02 : -l * 0.04);
-    cabin.castShadow = true;
-    group.add(cabin);
+  // Остекление: тёмный пояс по линии окон, чуть шире кузова.
+  const GLASS_BAND = {
+    sedan: { y: [0.56, 0.96], z: [-0.24, 0.2] },
+    suv: { y: [0.6, 0.96], z: [-0.46, 0.24] },
+    van: { y: [0.58, 0.94], z: [-0.3, 0.48] },
+    truck: { y: [0.72, 0.98], z: [0.08, 0.3] },
+  }[def.body] || { y: [0.56, 0.96], z: [-0.24, 0.2] };
 
-    // Стёкла.
-    const glassSide = new THREE.Mesh(box(w * 0.94, h * 0.26, cabinLen * 0.9), glassM);
-    glassSide.position.copy(cabin.position);
-    glassSide.position.y += h * 0.04;
-    group.add(glassSide);
+  const bandH = (GLASS_BAND.y[1] - GLASS_BAND.y[0]) * bodyH;
+  const bandL = (GLASS_BAND.z[1] - GLASS_BAND.z[0]) * l;
+  const glass = new THREE.Mesh(box(w * 1.005, bandH, bandL), glassM);
+  glass.position.set(
+    0,
+    ((GLASS_BAND.y[0] + GLASS_BAND.y[1]) / 2) * bodyH,
+    ((GLASS_BAND.z[0] + GLASS_BAND.z[1]) / 2) * l,
+  );
+  group.add(glass);
 
-    // Крыша чуть уже.
-    const roof = new THREE.Mesh(box(w * 0.86, h * 0.06, cabinLen * 0.92), bodyM);
-    roof.position.set(cabin.position.x, h * 0.84, cabin.position.z);
-    group.add(roof);
-  } else if (def.body === 'van') {
-    const bodyMesh = new THREE.Mesh(box(w, h * 0.8, l), bodyM);
-    bodyMesh.position.y = h * 0.42;
-    bodyMesh.castShadow = true;
-    group.add(bodyMesh);
-    const windshield = new THREE.Mesh(box(w * 0.9, h * 0.3, 0.1), glassM);
-    windshield.position.set(0, h * 0.62, l / 2 + 0.01);
-    group.add(windshield);
-    const sideGlass = new THREE.Mesh(box(w + 0.02, h * 0.22, l * 0.3), glassM);
-    sideGlass.position.set(0, h * 0.62, l * 0.22);
-    group.add(sideGlass);
-  } else {
-    // Газель: кабина + будка.
-    const cab = new THREE.Mesh(box(w, h * 0.55, l * 0.32), bodyM);
-    cab.position.set(0, h * 0.3, l * 0.32);
-    cab.castShadow = true;
-    group.add(cab);
-    const cargo = new THREE.Mesh(box(w * 1.02, h * 0.72, l * 0.62), mat(0xe8e6e0));
-    cargo.position.set(0, h * 0.42, -l * 0.17);
+  // У Газели будка светлее кабины.
+  if (def.body === 'truck') {
+    const cargo = new THREE.Mesh(box(w * 1.01, bodyH * 0.86, l * 0.56), mat(0xe8e6e0));
+    cargo.position.set(0, bodyH * 0.55, -l * 0.2);
     cargo.castShadow = true;
     group.add(cargo);
-    const windshield = new THREE.Mesh(box(w * 0.88, h * 0.26, 0.08), glassM);
-    windshield.position.set(0, h * 0.44, l * 0.48);
-    group.add(windshield);
   }
 
   // Бамперы и решётка.
@@ -394,18 +429,38 @@ export function createVehicle(type = 'zhiguli', color = 0xc9d3d9) {
 
 // --- уличные объекты (прототипы для InstancedMesh) --------------------------
 
+/** Крона-билборд: две скрещённые плоскости с альфа-текстурой листвы. */
+function crossPlanes(width, height) {
+  const a = new THREE.PlaneGeometry(width, height);
+  const b = new THREE.PlaneGeometry(width, height);
+  b.rotateY(Math.PI / 2);
+  const c = new THREE.PlaneGeometry(width, height);
+  c.rotateY(Math.PI / 4);
+  return mergeGeometries([a, b, c], false);
+}
+
+function foliageMaterial(tint) {
+  return new THREE.MeshLambertMaterial({
+    map: foliageTexture(tint),
+    transparent: true,
+    alphaTest: 0.45,
+    side: THREE.DoubleSide,
+    depthWrite: true,
+  });
+}
+
 export function propPrototypes() {
   const protos = {};
 
-  // Тополь: ствол + вытянутая крона.
+  // Тополь: ствол + вытянутая крона из билбордов.
   protos.poplar = [
     { geo: new THREE.CylinderGeometry(0.2, 0.32, 7, 6), mat: mat(0x5a4a3a), offset: [0, 3.5, 0] },
-    { geo: new THREE.ConeGeometry(1.25, 11, 7), mat: mat(0x53703a), offset: [0, 10, 0] },
+    { geo: crossPlanes(5.2, 11), mat: foliageMaterial('#48632f'), offset: [0, 9.5, 0] },
   ];
-  // Берёза: белый ствол + шарообразная крона.
+  // Берёза: белый ствол + округлая крона.
   protos.birch = [
     { geo: new THREE.CylinderGeometry(0.13, 0.18, 5, 6), mat: mat(0xe4e2da), offset: [0, 2.5, 0] },
-    { geo: new THREE.IcosahedronGeometry(1.9, 0), mat: mat(0x5d7a3a), offset: [0, 6, 0] },
+    { geo: crossPlanes(6.4, 6.4), mat: foliageMaterial('#688f3c'), offset: [0, 6.2, 0] },
   ];
   // Фонарь.
   protos.lamp = [

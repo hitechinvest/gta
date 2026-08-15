@@ -5,11 +5,16 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { CONFIG, roadCenter, snapToRoad } from '/shared/worldgen.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
-  asphalt, sidewalkTex, groundTex, signTexture, facadeLights,
+  flemishFacade, brickWall, asphalt, sidewalkTex, groundTex, signTexture,
+  facadeLights, normalFromTexture, clockFace,
 } from './textures.js';
 import { propPrototypes, churchDomes, columns } from './models.js';
 
-const FACADE_TILE = { panel: [6.4, 5.8], tower: [6.4, 5.8], stalinka: [7.2, 7.2], factory: [12, 9], private: [6, 5], garage: [4, 3], church: [8, 8], admin: [7.2, 7.2], chimney: [8, 8] };
+const FACADE_TILE = {
+  panel: [6.4, 5.8], tower: [6.4, 5.8], stalinka: [7.2, 7.2], factory: [12, 9],
+  private: [6, 5], garage: [4, 3], church: [8, 8], admin: [7.2, 7.2], chimney: [8, 8],
+  flemish: [5.6, 3.5], kremlinWall: [5, 5], kremlinTower: [5, 5], clockTower: [6, 6],
+};
 
 function facadeTexture(b) {
   switch (b.kind) {
@@ -18,7 +23,53 @@ function facadeTexture(b) {
     case 'factory': case 'chimney': return factoryFacade(b.color);
     case 'private': return privateFacade(b.color);
     case 'garage': return garageFacade(b.color);
+    case 'flemish': case 'clockTower': return flemishFacade(b.color);
+    case 'kremlinWall': case 'kremlinTower': return brickWall(b.color);
     default: return panelFacade(b.color, false);
+  }
+}
+
+/** Ступенчатый фламандский фронтон: коробки лесенкой над фасадом. */
+function stepGable(b, geos) {
+  const steps = b.gableSteps || 4;
+  const alongX = b.face === 'z-' || b.face === 'z+';
+  const width = alongX ? b.w : b.d;
+  const depth = alongX ? b.d : b.w;
+  const stepH = 1.1;
+  const stepW = (width / 2) / (steps + 0.6);
+
+  for (let i = 0; i <= steps; i++) {
+    const w = width - i * stepW * 2;
+    if (w < 1.2) break;
+    const g = new THREE.BoxGeometry(alongX ? w : depth, stepH, alongX ? depth : w);
+    g.translate(b.x, b.h + stepH / 2 + i * stepH, b.z);
+    geos.push(g);
+  }
+  // Конёк с флюгером.
+  const cap = new THREE.BoxGeometry(1.1, 1.6, 1.1);
+  cap.translate(b.x, b.h + steps * stepH + 1.5, b.z);
+  geos.push(cap);
+}
+
+/** Зубцы «ласточкин хвост» поверх кремлёвской стены. */
+function crenellations(b, geos) {
+  const alongX = b.w > b.d;
+  const len = alongX ? b.w : b.d;
+  const count = Math.max(2, Math.floor(len / 3));
+  const step = len / count;
+  for (let i = 0; i < count; i++) {
+    const offset = -len / 2 + step * (i + 0.5);
+    const g = new THREE.BoxGeometry(
+      alongX ? step * 0.55 : b.w + 0.2,
+      1.7,
+      alongX ? b.d + 0.2 : step * 0.55,
+    );
+    g.translate(
+      b.x + (alongX ? offset : 0),
+      b.h + 0.85,
+      b.z + (alongX ? 0 : offset),
+    );
+    geos.push(g);
   }
 }
 
@@ -38,7 +89,8 @@ function facadeBox(w, h, d, tileW, tileH) {
   return geo;
 }
 
-export function buildCity(scene, world) {
+export function buildCity(scene, world, quality = 'high') {
+  const rich = quality !== 'low';
   const group = new THREE.Group();
   group.name = 'city';
   scene.add(group);
@@ -115,6 +167,7 @@ export function buildCity(scene, world) {
   // --- дома ----------------------------------------------------------------
   const byMaterial = new Map(); // ключ -> {material, geos[]}
   const roofGeos = [];
+  const tileRoofs = new Map(); // цвет черепицы -> геометрии
   const signMeshes = [];
 
   for (const b of world.buildings) {
@@ -124,25 +177,58 @@ export function buildCity(scene, world) {
       tex.needsUpdate = true;
       const lights = facadeLights(b.kind).clone();
       lights.needsUpdate = true;
-      byMaterial.set(key, {
-        material: new THREE.MeshLambertMaterial({
-          map: tex,
-          emissiveMap: lights,
-          emissive: new THREE.Color(0x000000),
-          emissiveIntensity: 1,
-        }),
-        geos: [],
-      });
+      const params = {
+        map: tex,
+        emissiveMap: lights,
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 1,
+      };
+      let material;
+      if (rich) {
+        const normal = normalFromTexture(tex, b.kind === 'flemish' || b.kind === 'kremlinWall' ? 2.2 : 1.4);
+        material = new THREE.MeshStandardMaterial({
+          ...params,
+          normalMap: normal || undefined,
+          normalScale: new THREE.Vector2(0.9, 0.9),
+          roughness: 0.92,
+          metalness: 0.02,
+        });
+      } else {
+        material = new THREE.MeshLambertMaterial(params);
+      }
+      byMaterial.set(key, { material, geos: [] });
     }
     const tile = FACADE_TILE[b.kind] || [6.4, 5.8];
     const geo = facadeBox(b.w, b.h, b.d, tile[0], tile[1]);
     geo.translate(b.x, b.h / 2, b.z);
-    byMaterial.get(key).geos.push(geo);
+    const bucket = byMaterial.get(key);
+    bucket.geos.push(geo);
 
-    // Крыша-плита, чтобы фасадная текстура не смотрела в небо.
-    const roof = new THREE.BoxGeometry(b.w + 0.4, 0.4, b.d + 0.4);
-    roof.translate(b.x, b.h + 0.2, b.z);
-    roofGeos.push(roof);
+    // Фламандский фронтон и кремлёвские зубцы — той же кладкой.
+    if (b.kind === 'flemish' && b.gable) stepGable(b, bucket.geos);
+    if (b.kind === 'kremlinWall' || b.kind === 'kremlinTower') crenellations(b, bucket.geos);
+
+    if (b.kind === 'flemish') {
+      // Черепичная кровля вместо плоской плиты.
+      const rc = b.roofColor || 0x5a4038;
+      if (!tileRoofs.has(rc)) tileRoofs.set(rc, []);
+      const alongX = b.face === 'z-' || b.face === 'z+';
+      const roof = new THREE.BoxGeometry(b.w + 0.5, 0.5, b.d + 0.5);
+      roof.translate(b.x, b.h + 0.25, b.z);
+      tileRoofs.get(rc).push(roof);
+      const ridge = new THREE.CylinderGeometry(
+        (alongX ? b.d : b.w) * 0.52, (alongX ? b.d : b.w) * 0.52, alongX ? b.w : b.d, 4, 1,
+      );
+      ridge.rotateZ(Math.PI / 2);
+      if (!alongX) ridge.rotateY(Math.PI / 2);
+      ridge.rotateY(alongX ? 0 : 0);
+      ridge.translate(b.x, b.h + 1.1, b.z);
+      tileRoofs.get(rc).push(ridge);
+    } else if (b.kind !== 'kremlinWall') {
+      const roof = new THREE.BoxGeometry(b.w + 0.4, 0.4, b.d + 0.4);
+      roof.translate(b.x, b.h + 0.2, b.z);
+      roofGeos.push(roof);
+    }
 
     // Скатная крыша частного дома.
     if (b.kind === 'private') {
@@ -150,6 +236,36 @@ export function buildCity(scene, world) {
       gable.rotateY(Math.PI / 4);
       gable.translate(b.x, b.h + 1.5, b.z);
       roofGeos.push(gable);
+    }
+
+    // Шатёр кремлёвской башни.
+    if (b.kind === 'kremlinTower') {
+      const tent = new THREE.ConeGeometry(b.w * 0.85, 7, 4);
+      tent.rotateY(Math.PI / 4);
+      tent.translate(b.x, b.h + 5.2, b.z);
+      if (!tileRoofs.has(0x3f4a52)) tileRoofs.set(0x3f4a52, []);
+      tileRoofs.get(0x3f4a52).push(tent);
+    }
+
+    // Благовещенская башня: шпиль с флагом и циферблаты.
+    if (b.kind === 'clockTower') {
+      const tent = new THREE.ConeGeometry(b.w * 0.8, 9, 4);
+      tent.rotateY(Math.PI / 4);
+      tent.translate(b.x, b.h + 5.5, b.z);
+      if (!tileRoofs.has(0x2f5d4a)) tileRoofs.set(0x2f5d4a, []);
+      tileRoofs.get(0x2f5d4a).push(tent);
+
+      const spire = new THREE.CylinderGeometry(0.06, 0.16, 5, 6);
+      spire.translate(b.x, b.h + 12, b.z);
+      tileRoofs.get(0x2f5d4a).push(spire);
+
+      const clockMat = new THREE.MeshBasicMaterial({ map: clockFace(), toneMapped: false });
+      for (const [dx, dz, ry] of [[0, b.d / 2 + 0.06, 0], [0, -b.d / 2 - 0.06, Math.PI], [b.w / 2 + 0.06, 0, Math.PI / 2], [-b.w / 2 - 0.06, 0, -Math.PI / 2]]) {
+        const face = new THREE.Mesh(new THREE.CircleGeometry(2.1, 20), clockMat);
+        face.position.set(b.x + dx, b.h - 4, b.z + dz);
+        face.rotation.y = ry;
+        group.add(face);
+      }
     }
 
     if (b.kind === 'church') group.add(churchDomes(b.w, b.d, b.h));
@@ -202,6 +318,21 @@ export function buildCity(scene, world) {
   roofMesh.castShadow = true;
   roofMesh.receiveShadow = true;
   group.add(roofMesh);
+
+  // Черепица и шатры — свой цвет на каждую группу.
+  for (const [color, geos] of tileRoofs) {
+    if (!geos.length) continue;
+    const mesh = new THREE.Mesh(
+      mergeGeometries(geos, false),
+      rich
+        ? new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05 })
+        : new THREE.MeshLambertMaterial({ color }),
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    geos.forEach((g) => g.dispose());
+  }
 
   // --- уличная мелочь через инстансы --------------------------------------
   const protos = propPrototypes();

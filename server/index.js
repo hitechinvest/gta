@@ -16,11 +16,17 @@ const ROOT = path.resolve(__dirname, '..');
 ensureVendorFiles();
 
 function ensureVendorFiles() {
+  const pp = ['EffectComposer', 'RenderPass', 'ShaderPass', 'MaskPass', 'UnrealBloomPass', 'OutputPass', 'Pass'];
+  const shaders = ['CopyShader', 'LuminosityHighPassShader', 'OutputShader', 'FXAAShader'];
   const pairs = [
     ['node_modules/three/build/three.module.js', 'public/vendor/three.module.js'],
     ['node_modules/three/examples/jsm/utils/BufferGeometryUtils.js', 'public/vendor/BufferGeometryUtils.js'],
+    ...pp.map((n) => [`node_modules/three/examples/jsm/postprocessing/${n}.js`, `public/vendor/postprocessing/${n}.js`]),
+    ...shaders.map((n) => [`node_modules/three/examples/jsm/shaders/${n}.js`, `public/vendor/shaders/${n}.js`]),
   ];
-  fs.mkdirSync(path.join(ROOT, 'public/vendor'), { recursive: true });
+  for (const dir of ['public/vendor', 'public/vendor/postprocessing', 'public/vendor/shaders']) {
+    fs.mkdirSync(path.join(ROOT, dir), { recursive: true });
+  }
   for (const [from, to] of pairs) {
     const dest = path.join(ROOT, to);
     if (fs.existsSync(dest)) continue;
