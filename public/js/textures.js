@@ -520,6 +520,76 @@ export function odekolonFacade(baseColor = 0xa6503f) {
   return tex;
 }
 
+/**
+ * Замок театра кукол: светлый камень квадрами и высокие стрельчатые окна
+ * с наличниками. Тайл = 1 этаж, 2 окна.
+ */
+export function castleFacade(baseColor = 0xece4d0) {
+  const key = `castle-${baseColor}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const W = 256, H = 256;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  const base = new THREE.Color(baseColor);
+  ctx.fillStyle = hex(baseColor);
+  ctx.fillRect(0, 0, W, H);
+
+  // Каменная кладка крупными квадрами.
+  const bh = 16;
+  const bw = 42;
+  for (let row = 0, y = 0; y < H; row++, y += bh) {
+    const off = (row % 2) * (bw / 2);
+    for (let x = -bw; x < W + bw; x += bw) {
+      const col = base.clone().multiplyScalar(0.94 + Math.random() * 0.12);
+      ctx.fillStyle = col.getStyle();
+      ctx.fillRect(x + off + 1, y + 1, bw - 2, bh - 2);
+    }
+  }
+
+  // Два стрельчатых окна.
+  for (const wx of [W * 0.16, W * 0.58]) {
+    const ww = W * 0.26;
+    const wy = H * 0.2;
+    const wh = H * 0.56;
+    const r = ww / 2;
+
+    ctx.fillStyle = 'rgba(252,248,238,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(wx - 8, wy + wh + 8);
+    ctx.lineTo(wx - 8, wy + r * 0.7);
+    ctx.lineTo(wx + ww / 2, wy - r * 0.5);
+    ctx.lineTo(wx + ww + 8, wy + r * 0.7);
+    ctx.lineTo(wx + ww + 8, wy + wh + 8);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#26323c';
+    ctx.beginPath();
+    ctx.moveTo(wx, wy + wh);
+    ctx.lineTo(wx, wy + r * 0.75);
+    ctx.lineTo(wx + ww / 2, wy);
+    ctx.lineTo(wx + ww, wy + r * 0.75);
+    ctx.lineTo(wx + ww, wy + wh);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(250,246,236,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(wx + ww / 2, wy); ctx.lineTo(wx + ww / 2, wy + wh);
+    ctx.moveTo(wx, wy + wh * 0.62); ctx.lineTo(wx + ww, wy + wh * 0.62);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(170,200,225,0.22)';
+    ctx.fillRect(wx + 3, wy + r, ww * 0.42, wh * 0.35);
+  }
+
+  noise(ctx, W, H, 12);
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Кладка кремлёвской стены — крупный кирпич, без окон. */
 export function brickWall(baseColor = 0x9c4a3c) {
   const key = `brick-${baseColor}`;

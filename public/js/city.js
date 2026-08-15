@@ -5,7 +5,7 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { CONFIG, roadCenter, snapToRoad } from '/shared/worldgen.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
-  flemishFacade, brickWall, khrushchevkaFacade, series125Facade, odekolonFacade, asphalt, sidewalkTex, groundTex, signTexture,
+  flemishFacade, brickWall, khrushchevkaFacade, series125Facade, odekolonFacade, castleFacade, asphalt, sidewalkTex, groundTex, signTexture,
   facadeLights, normalFromTexture, clockFace,
 } from './textures.js';
 import { propPrototypes, churchDomes, columns } from './models.js';
@@ -15,6 +15,7 @@ const FACADE_TILE = {
   private: [6, 5], garage: [4, 3], church: [8, 8], admin: [7.2, 7.2], chimney: [8, 8],
   flemish: [5.6, 3.5], kremlinWall: [5, 5], kremlinTower: [5, 5], clockTower: [6, 6],
   khrushchevka: [6.5, 5.6], series125: [7, 5.8], odekolon: [6, 6], antenna: [2, 6],
+  castle: [8, 8],
 };
 
 function facadeTexture(b) {
@@ -29,6 +30,7 @@ function facadeTexture(b) {
     case 'series125': return series125Facade(b.color, b.accent);
     case 'kremlinWall': case 'kremlinTower': return brickWall(b.color);
     case 'odekolon': return odekolonFacade(b.color);
+    case 'castle': return castleFacade(b.color);
     case 'antenna': return brickWall(0x9aa0a6);
     default: return panelFacade(b.color, false);
   }
@@ -115,6 +117,68 @@ function loggiaParapets(b, geos) {
       }
     }
   }
+}
+
+/**
+ * Круглые башни замка: барабан из камня, синий шатёр и флажок.
+ * Возвращает группу — цилиндры не сливаются с коробками фасадов.
+ */
+function castleTowers(b) {
+  const g = new THREE.Group();
+  const wallMat = new THREE.MeshStandardMaterial({
+    map: castleFacade(b.color), roughness: 0.9, metalness: 0.02,
+  });
+  const roofMat = new THREE.MeshStandardMaterial({
+    color: b.roofColor || 0x2e4a6e, roughness: 0.55, metalness: 0.15,
+  });
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: 0xd8b24a, roughness: 0.4, metalness: 0.6,
+  });
+
+  for (const t of b.towers || []) {
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(t.r, t.r, t.h, 12), wallMat);
+    drum.position.set(b.x + t.dx, t.h / 2, b.z + t.dz);
+    drum.castShadow = true;
+    drum.receiveShadow = true;
+    g.add(drum);
+
+    // Карниз под шатром.
+    const cornice = new THREE.Mesh(
+      new THREE.CylinderGeometry(t.r * 1.18, t.r * 1.18, 0.5, 12), wallMat,
+    );
+    cornice.position.set(b.x + t.dx, t.h + 0.2, b.z + t.dz);
+    g.add(cornice);
+
+    const spire = new THREE.Mesh(
+      new THREE.ConeGeometry(t.r * 1.22, t.spire || t.r * 3, 12), roofMat,
+    );
+    spire.position.set(b.x + t.dx, t.h + (t.spire || t.r * 3) / 2 + 0.4, b.z + t.dz);
+    spire.castShadow = true;
+    g.add(spire);
+
+    // Шпиль с флажком на верхушке.
+    const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.8, 6), goldMat);
+    pin.position.set(b.x + t.dx, t.h + (t.spire || t.r * 3) + 1.2, b.z + t.dz);
+    g.add(pin);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), new THREE.MeshStandardMaterial({
+      color: 0xb03a3a, side: THREE.DoubleSide, roughness: 0.8,
+    }));
+    flag.position.set(b.x + t.dx + 0.55, t.h + (t.spire || t.r * 3) + 1.7, b.z + t.dz);
+    g.add(flag);
+  }
+
+  // Зубчатый парапет по верху основного объёма.
+  const merlonMat = wallMat;
+  const perX = Math.max(3, Math.floor(b.w / 2.4));
+  for (let i = 0; i < perX; i++) {
+    const x = b.x - b.w / 2 + (b.w / perX) * (i + 0.5);
+    for (const side of [-1, 1]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(b.w / perX * 0.55, 1.1, 0.5), merlonMat);
+      m.position.set(x, b.h + 0.55, b.z + side * (b.d / 2 - 0.25));
+      g.add(m);
+    }
+  }
+  return g;
 }
 
 /** Зубцы «ласточкин хвост» поверх кремлёвской стены. */
@@ -339,6 +403,7 @@ export function buildCity(scene, world, quality = 'high') {
       }
     }
 
+    if (b.kind === 'castle' && b.towers) group.add(castleTowers(b));
     if (b.kind === 'church') group.add(churchDomes(b.w, b.d, b.h));
     if (b.kind === 'admin') {
       const col = columns(b.w, b.d, b.h);
@@ -442,13 +507,14 @@ export function buildCity(scene, world, quality = 'high') {
         dummy.position.set(p.x, 0.18, p.z);
         dummy.rotation.set(0, p.rot || 0, 0);
         const s = p.scale || 1;
-        dummy.scale.set(type === 'fence' ? s : s, s, type === 'fence' ? 1 : s);
+        dummy.scale.set(s, type === 'fence' ? 1 : s, type === 'fence' ? 1 : s);
         dummy.updateMatrix();
         // Смещение части внутри прототипа с учётом поворота.
         const off = new THREE.Vector3(...part.offset);
         off.applyEuler(dummy.rotation);
         off.multiplyScalar(1);
-        dummy.position.add(new THREE.Vector3(off.x * (type === 'fence' ? 1 : s), off.y * s, off.z * s));
+        const sy = type === 'fence' ? 1 : s;
+        dummy.position.add(new THREE.Vector3(off.x * s, off.y * sy, off.z * sy));
         dummy.updateMatrix();
         inst.setMatrixAt(k, dummy.matrix);
       }

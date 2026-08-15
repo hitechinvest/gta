@@ -166,6 +166,53 @@ function buildFlemishBlock(rng, x0, z0, size, out, props) {
 }
 
 /**
+ * Театр кукол на Патриаршей площади — сказочный замок в духе
+ * Нойшванштайна: светлый камень, круглые башни с синими шатрами.
+ * Открыт в 2014-м и стал главной «открыткой» города.
+ */
+function buildPuppetTheatre(rng, x0, z0, size, out, props) {
+  const cx = x0 + size / 2;
+  const cz = z0 + size / 2;
+  const wall = 0xece4d0;
+  const roof = 0x2e4a6e;
+
+  // Главный корпус и пониженное крыло — замок никогда не бывает симметричным.
+  out.push({
+    kind: 'castle',
+    x: cx, z: cz - 2, w: 34, d: 18, h: 17, floors: 4,
+    color: wall, roofColor: roof, sign: 'ТЕАТР КУКОЛ',
+    towers: [
+      { dx: -17, dz: -9, r: 3.6, h: 30, spire: 12 },
+      { dx: 17, dz: -9, r: 3.0, h: 24, spire: 9 },
+      { dx: -17, dz: 9, r: 2.6, h: 21, spire: 8 },
+      { dx: 17, dz: 9, r: 4.2, h: 34, spire: 14 },
+      { dx: 0, dz: -11, r: 2.2, h: 22, spire: 7 },
+    ],
+  });
+  out.push({
+    kind: 'castle',
+    x: cx - 22, z: cz + 12, w: 16, d: 14, h: 11, floors: 3,
+    color: wall, roofColor: roof, sign: '',
+    towers: [{ dx: -7, dz: 6, r: 2.4, h: 18, spire: 7 }],
+  });
+
+  // Ограда, фонари и сквер перед входом.
+  props.push({ type: 'fence', x: cx, z: z0 + 3, rot: 0, scale: size / 12 });
+  props.push({ type: 'lamp', x: cx - 12, z: cz - 16, rot: 0, scale: 1 });
+  props.push({ type: 'lamp', x: cx + 12, z: cz - 16, rot: Math.PI, scale: 1 });
+  props.push({ type: 'bench', x: cx - 6, z: cz - 20, rot: 0, scale: 1 });
+  props.push({ type: 'bench', x: cx + 6, z: cz - 20, rot: 0, scale: 1 });
+  for (let t = 0; t < 6; t++) {
+    props.push({
+      type: 'birch',
+      x: x0 + 5 + rng() * (size - 10),
+      z: z0 + 5 + rng() * 12,
+      rot: rng() * Math.PI * 2, scale: 0.8 + rng() * 0.4,
+    });
+  }
+}
+
+/**
  * Дом-Одеколон — реальная доминанта Йошкар-Олы на улице Эшкинина:
  * 23 этажа, ~85 м, красный кирпич, силуэт флакона с узким «горлышком»
  * наверху. Самое высокое здание республики, видно почти отовсюду.
@@ -480,6 +527,7 @@ export function generateWorld(seed = 1337) {
 
       if (ring === 0) kind = 'square';
       else if (i === center + 2 && j === center - 1) kind = 'odekolon';
+      else if (i === center - 1 && j === center + 1) kind = 'puppetTheatre';
       else if (ring === 1) kind = rng() < 0.75 ? 'flemish' : 'stalinka';
       else if (ring === 2) kind = rng() < 0.45 ? 'khrushchevka' : rng() < 0.55 ? 'panel' : rng() < 0.5 ? 'flemish' : 'stalinka';
       else {
@@ -497,6 +545,7 @@ export function generateWorld(seed = 1337) {
         case 'square': buildSquare(rng, x, z, block, buildings, props); break;
         case 'flemish': buildFlemishBlock(rng, x, z, block, buildings, props); break;
         case 'odekolon': buildOdekolon(rng, x, z, block, buildings, props); break;
+        case 'puppetTheatre': buildPuppetTheatre(rng, x, z, block, buildings, props); break;
         case 'khrushchevka': buildKhrushchevkaBlock(rng, x, z, block, buildings, props); break;
         case 'stalinka': buildStalinkaBlock(rng, x, z, block, buildings, props); break;
         case 'panel': buildPanelBlock(rng, x, z, block, buildings, props); break;
