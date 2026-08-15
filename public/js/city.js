@@ -210,6 +210,50 @@ function castleTowers(b) {
   return g;
 }
 
+/**
+ * Кондиционеры, спутниковые тарелки и водосточные трубы на жилых домах.
+ * Мелочь, но именно она отличает жилой дом от макета: голый фасад
+ * читается как декорация, а с блоками и тарелками — как обитаемый.
+ */
+function wallClutter(b, boxes, dishes, rng) {
+  const floors = b.floors || Math.max(2, Math.round(b.h / 3));
+  const floorH = b.h / floors;
+  const alongX = b.w > b.d;
+  const len = alongX ? b.w : b.d;
+  const depth = alongX ? b.d : b.w;
+  const count = Math.max(2, Math.floor(len / 7));
+
+  for (let i = 0; i < count; i++) {
+    for (const side of [1, -1]) {
+      if (rng() < 0.45) continue;
+      const along = -len / 2 + len * ((i + 0.5) / count) + (rng() - 0.5) * 2;
+      const floor = 1 + Math.floor(rng() * Math.max(1, floors - 2));
+      const y = floor * floorH + floorH * 0.55;
+      const x = b.x + (alongX ? along : side * (depth / 2 + 0.22));
+      const z = b.z + (alongX ? side * (depth / 2 + 0.22) : along);
+
+      if (rng() < 0.65) {
+        // Наружный блок кондиционера.
+        const g = new THREE.BoxGeometry(alongX ? 0.85 : 0.44, 0.6, alongX ? 0.44 : 0.85);
+        g.translate(x, y, z);
+        boxes.push(g);
+      } else {
+        // Тарелка: неглубокая чаша на кронштейне.
+        const dish = new THREE.SphereGeometry(0.42, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2.6);
+        dish.rotateX(alongX ? (side > 0 ? Math.PI / 1.7 : -Math.PI / 1.7) : Math.PI / 2);
+        if (!alongX) dish.rotateZ(side > 0 ? -Math.PI / 1.7 : Math.PI / 1.7);
+        dish.translate(x, y, z);
+        dishes.push(dish);
+      }
+    }
+  }
+
+  // Водосточная труба по углу дома.
+  const pipe = new THREE.CylinderGeometry(0.1, 0.1, b.h, 6);
+  pipe.translate(b.x + b.w / 2 - 0.14, b.h / 2, b.z + b.d / 2 - 0.14);
+  boxes.push(pipe);
+}
+
 /** Зубцы «ласточкин хвост» поверх кремлёвской стены. */
 function crenellations(b, geos, bake = true) {
   const alongX = b.w > b.d;
@@ -327,6 +371,13 @@ export function buildCity(scene, world, quality = 'high') {
   const byMaterial = new Map(); // ключ -> {material, geos[]}
   const roofGeos = [];
   const concreteGeos = []; // козырьки подъездов и парапеты лоджий
+  const clutterGeos = []; // кондиционеры и трубы
+  const dishGeos = [];
+  let clutterSeed = 1;
+  const clutterRng = () => {
+    clutterSeed = (clutterSeed * 1103515245 + 12345) & 0x7fffffff;
+    return clutterSeed / 0x7fffffff;
+  };
   const tileRoofs = new Map(); // цвет черепицы -> геометрии
   const signMeshes = [];
 
@@ -375,6 +426,9 @@ export function buildCity(scene, world, quality = 'high') {
     if (b.kind === 'kremlinWall' || b.kind === 'kremlinTower') crenellations(b, bucket.geos);
     if (b.kind === 'khrushchevka') entrances(b, concreteGeos);
     if (b.kind === 'series125') loggiaParapets(b, concreteGeos);
+    if (['panel', 'khrushchevka', 'series125', 'tower', 'stalinka'].includes(b.kind) && !b.y0) {
+      wallClutter(b, clutterGeos, dishGeos, clutterRng);
+    }
 
     if (b.kind === 'flemish') {
       // Черепичная кровля вместо плоской плиты.
@@ -518,6 +572,24 @@ export function buildCity(scene, world, quality = 'high') {
   roofMesh.castShadow = true;
   roofMesh.receiveShadow = true;
   group.add(roofMesh);
+
+  if (clutterGeos.length) {
+    const clutter = new THREE.Mesh(
+      mergeGeometries(clutterGeos, false),
+      new THREE.MeshLambertMaterial({ color: 0xd6d4cd }),
+    );
+    clutter.castShadow = true;
+    group.add(clutter);
+    clutterGeos.forEach((g) => g.dispose());
+  }
+  if (dishGeos.length) {
+    const dishes = new THREE.Mesh(
+      mergeGeometries(dishGeos, false),
+      new THREE.MeshLambertMaterial({ color: 0xe6e4dc, side: THREE.DoubleSide }),
+    );
+    group.add(dishes);
+    dishGeos.forEach((g) => g.dispose());
+  }
 
   if (concreteGeos.length) {
     const concrete = new THREE.Mesh(
