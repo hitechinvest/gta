@@ -166,6 +166,58 @@ function buildFlemishBlock(rng, x0, z0, size, out, props) {
 }
 
 /**
+ * Дом-Одеколон — реальная доминанта Йошкар-Олы на улице Эшкинина:
+ * 23 этажа, ~85 м, красный кирпич, силуэт флакона с узким «горлышком»
+ * наверху. Самое высокое здание республики, видно почти отовсюду.
+ */
+function buildOdekolon(rng, x0, z0, size, out, props) {
+  const cx = x0 + size * 0.42;
+  const cz = z0 + size * 0.42;
+  const color = 0xa6503f;
+
+  // Ярусы флакона: широкое основание → плечи → горлышко → колпачок.
+  const tiers = [
+    { w: 20, d: 20, y0: 0, h: 44 },
+    { w: 16, d: 16, y0: 44, h: 66 },
+    { w: 11, d: 11, y0: 66, h: 79 }, // горлышко
+    { w: 14, d: 14, y0: 79, h: 83.5 }, // колпачок
+  ];
+  for (const t of tiers) {
+    out.push({
+      kind: 'odekolon',
+      x: cx, z: cz, w: t.w, d: t.d, y0: t.y0, h: t.h,
+      floors: Math.round((t.h - t.y0) / 3),
+      color,
+      sign: '',
+    });
+  }
+  // Антенна на колпачке.
+  out.push({
+    kind: 'antenna', x: cx, z: cz, w: 0.9, d: 0.9, y0: 83.5, h: 92,
+    floors: 1, color: 0x9aa0a6, sign: '',
+  });
+
+  // Пристройка-стилобат с вывеской: внизу был ЗАГС.
+  out.push({
+    kind: 'stalinka',
+    x: cx - 16, z: cz + 13,
+    w: 18, d: 12, h: 7, floors: 2,
+    color: 0xd8c39a, sign: 'ЗАГС',
+  });
+
+  for (let t = 0; t < 8; t++) {
+    props.push({
+      type: rng() < 0.5 ? 'poplar' : 'birch',
+      x: x0 + 4 + rng() * (size - 8),
+      z: z0 + 4 + rng() * (size - 8),
+      rot: rng() * Math.PI * 2, scale: 0.9 + rng() * 0.5,
+    });
+  }
+  props.push({ type: 'bench', x: cx + 14, z: cz + 14, rot: 0, scale: 1 });
+  props.push({ type: 'kiosk', x: cx + 18, z: cz - 10, rot: rng() * Math.PI, scale: 1 });
+}
+
+/**
  * Квартал хрущёвок: два-три длинных пятиэтажных дома параллельно,
  * между ними двор с сушилками и лавками. Классика 60-х.
  */
@@ -427,6 +479,7 @@ export function generateWorld(seed = 1337) {
       let kind;
 
       if (ring === 0) kind = 'square';
+      else if (i === center + 2 && j === center - 1) kind = 'odekolon';
       else if (ring === 1) kind = rng() < 0.75 ? 'flemish' : 'stalinka';
       else if (ring === 2) kind = rng() < 0.45 ? 'khrushchevka' : rng() < 0.55 ? 'panel' : rng() < 0.5 ? 'flemish' : 'stalinka';
       else {
@@ -443,6 +496,7 @@ export function generateWorld(seed = 1337) {
       switch (kind) {
         case 'square': buildSquare(rng, x, z, block, buildings, props); break;
         case 'flemish': buildFlemishBlock(rng, x, z, block, buildings, props); break;
+        case 'odekolon': buildOdekolon(rng, x, z, block, buildings, props); break;
         case 'khrushchevka': buildKhrushchevkaBlock(rng, x, z, block, buildings, props); break;
         case 'stalinka': buildStalinkaBlock(rng, x, z, block, buildings, props); break;
         case 'panel': buildPanelBlock(rng, x, z, block, buildings, props); break;
@@ -538,6 +592,7 @@ export function snapToRoad(v) {
 /**
  * Выталкивает окружность из всех зданий, которые она задевает.
  * Используется и физикой клиента, и ИИ на сервере.
+ * Ярусы, поднятые над землёй (y0 > 0), пешеходу не мешают.
  */
 export function resolveCircle(world, x, z, radius, out = { x: 0, z: 0, hit: false, nx: 0, nz: 0 }) {
   out.x = x;
@@ -547,6 +602,7 @@ export function resolveCircle(world, x, z, radius, out = { x: 0, z: 0, hit: fals
   out.nz = 0;
 
   for (const b of world.buildings) {
+    if (b.y0) continue; // висящий ярус — под ним можно пройти
     const hw = b.w / 2 + radius;
     const hd = b.d / 2 + radius;
     const dx = out.x - b.x;
@@ -586,7 +642,7 @@ export function raycastBuildings(world, ox, oy, oz, dx, dy, dz, maxDist) {
     let t1 = best;
     const slabs = [
       [ox, dx, b.x - b.w / 2, b.x + b.w / 2],
-      [oy, dy, 0, b.h],
+      [oy, dy, b.y0 || 0, b.h],
       [oz, dz, b.z - b.d / 2, b.z + b.d / 2],
     ];
     let miss = false;

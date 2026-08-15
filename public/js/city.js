@@ -5,7 +5,7 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { CONFIG, roadCenter, snapToRoad } from '/shared/worldgen.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
-  flemishFacade, brickWall, khrushchevkaFacade, series125Facade, asphalt, sidewalkTex, groundTex, signTexture,
+  flemishFacade, brickWall, khrushchevkaFacade, series125Facade, odekolonFacade, asphalt, sidewalkTex, groundTex, signTexture,
   facadeLights, normalFromTexture, clockFace,
 } from './textures.js';
 import { propPrototypes, churchDomes, columns } from './models.js';
@@ -14,7 +14,7 @@ const FACADE_TILE = {
   panel: [6.4, 5.8], tower: [6.4, 5.8], stalinka: [7.2, 7.2], factory: [12, 9],
   private: [6, 5], garage: [4, 3], church: [8, 8], admin: [7.2, 7.2], chimney: [8, 8],
   flemish: [5.6, 3.5], kremlinWall: [5, 5], kremlinTower: [5, 5], clockTower: [6, 6],
-  khrushchevka: [6.5, 5.6], series125: [7, 5.8],
+  khrushchevka: [6.5, 5.6], series125: [7, 5.8], odekolon: [6, 6], antenna: [2, 6],
 };
 
 function facadeTexture(b) {
@@ -28,6 +28,8 @@ function facadeTexture(b) {
     case 'khrushchevka': return khrushchevkaFacade(b.color, b.brick);
     case 'series125': return series125Facade(b.color, b.accent);
     case 'kremlinWall': case 'kremlinTower': return brickWall(b.color);
+    case 'odekolon': return odekolonFacade(b.color);
+    case 'antenna': return brickWall(0x9aa0a6);
     default: return panelFacade(b.color, false);
   }
 }
@@ -264,8 +266,10 @@ export function buildCity(scene, world, quality = 'high') {
       byMaterial.set(key, { material, geos: [] });
     }
     const tile = FACADE_TILE[b.kind] || [6.4, 5.8];
-    const geo = facadeBox(b.w, b.h, b.d, tile[0], tile[1]);
-    geo.translate(b.x, b.h / 2, b.z);
+    const base = b.y0 || 0;
+    const height = b.h - base;
+    const geo = facadeBox(b.w, height, b.d, tile[0], tile[1]);
+    geo.translate(b.x, base + height / 2, b.z);
     const bucket = byMaterial.get(key);
     bucket.geos.push(geo);
 

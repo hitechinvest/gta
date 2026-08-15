@@ -448,6 +448,78 @@ export function flemishFacade(baseColor = 0xa8443a) {
   return tex;
 }
 
+/**
+ * Дом-Одеколон: красный кирпич позднесоветского модернизма, узкие окна
+ * в вертикальных лентах между кирпичными простенками, лоджии в нишах.
+ */
+export function odekolonFacade(baseColor = 0xa6503f) {
+  const key = `odekolon-${baseColor}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const W = 256, H = 256;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  const base = new THREE.Color(baseColor);
+  ctx.fillStyle = hex(baseColor);
+  ctx.fillRect(0, 0, W, H);
+
+  // Кладка: кирпич мельче, чем у фламандских домов, шов темнее.
+  const bh = 7;
+  const bw = 19;
+  for (let row = 0, y = 0; y < H; row++, y += bh) {
+    const off = (row % 2) * (bw / 2);
+    for (let x = -bw; x < W + bw; x += bw) {
+      const col = base.clone().multiplyScalar(0.86 + Math.random() * 0.28);
+      ctx.fillStyle = col.getStyle();
+      ctx.fillRect(x + off + 1, y + 1, bw - 2, bh - 2);
+    }
+  }
+
+  // Два этажа на тайл, окна лентами.
+  const floorH = H / 2;
+  for (let f = 0; f < 2; f++) {
+    const y0 = f * floorH;
+    const winY = y0 + floorH * 0.22;
+    const winH = floorH * 0.46;
+
+    // Лента узких окон слева.
+    for (let i = 0; i < 3; i++) {
+      const wx = W * (0.07 + i * 0.13);
+      const ww = W * 0.09;
+      ctx.fillStyle = '#28323b';
+      ctx.fillRect(wx, winY, ww, winH);
+      ctx.strokeStyle = 'rgba(226,222,212,0.75)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(wx, winY, ww, winH);
+      ctx.fillStyle = 'rgba(160,190,210,0.18)';
+      ctx.fillRect(wx + 2, winY + 2, ww * 0.5, winH * 0.4);
+    }
+
+    // Лоджия в нише справа — тёмный провал с парапетом.
+    const lx = W * 0.56;
+    const lw = W * 0.36;
+    ctx.fillStyle = 'rgba(40,44,48,0.9)';
+    ctx.fillRect(lx, y0 + floorH * 0.12, lw, floorH * 0.74);
+    const grad = ctx.createLinearGradient(lx, 0, lx + lw, 0);
+    grad.addColorStop(0, 'rgba(0,0,0,0.5)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.15)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(lx, y0 + floorH * 0.12, lw, floorH * 0.74);
+    ctx.fillStyle = 'rgba(150,155,150,0.55)';
+    ctx.fillRect(lx + lw * 0.12, winY, lw * 0.3, winH);
+    // Парапет — бетон под цвет плит.
+    ctx.fillStyle = '#b0aa9c';
+    ctx.fillRect(lx - 3, y0 + floorH * 0.58, lw + 6, floorH * 0.2);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(lx - 3, y0 + floorH * 0.76, lw + 6, 3);
+  }
+
+  noise(ctx, W, H, 16);
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Кладка кремлёвской стены — крупный кирпич, без окон. */
 export function brickWall(baseColor = 0x9c4a3c) {
   const key = `brick-${baseColor}`;
@@ -566,7 +638,7 @@ export function facadeLights(kind) {
   const key = `lights-${kind}`;
   if (cache.has(key)) return cache.get(key);
 
-  const sizes = { panel: [256, 256], tower: [256, 256], stalinka: [256, 256], admin: [256, 256], church: [256, 256], factory: [256, 128], private: [128, 128], garage: [64, 64] };
+  const sizes = { panel: [256, 256], tower: [256, 256], odekolon: [256, 256], khrushchevka: [256, 256], series125: [256, 256], stalinka: [256, 256], admin: [256, 256], church: [256, 256], factory: [256, 128], private: [128, 128], garage: [64, 64] };
   const [W, H] = sizes[kind] || [256, 256];
   const c = canvas(W, H);
   const ctx = c.getContext('2d');
@@ -599,6 +671,12 @@ export function facadeLights(kind) {
     for (let f = 0; f < 2; f++) {
       const y0 = f * (H / 2);
       for (let i = 0; i < 3; i++) lit(W * (0.1 + i * 0.3), y0 + H * 0.09, W * 0.16, H * 0.26, 0.45);
+    }
+  } else if (kind === 'odekolon') {
+    for (let f = 0; f < 2; f++) {
+      const y0 = f * (H / 2);
+      for (let i = 0; i < 3; i++) lit(W * (0.07 + i * 0.13), y0 + H * 0.11, W * 0.09, H * 0.23, 0.5);
+      lit(W * 0.62, y0 + H * 0.11, W * 0.14, H * 0.23, 0.35);
     }
   } else if (kind === 'flemish') {
     for (const wx of [W * 0.14, W * 0.58]) lit(wx, H * 0.16, W * 0.28, H * 0.56, 0.55);
