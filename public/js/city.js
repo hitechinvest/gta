@@ -614,6 +614,52 @@ export function buildCity(scene, world, quality = 'high') {
   );
   group.add(curbs);
 
+  // --- дорожная разметка ---------------------------------------------------
+  // Зебры и стоп-линии рисуются отдельными плитами поверх асфальта: без них
+  // перекрёсток читается как пустое пятно, а с ними улица выглядит живой.
+  const paintGeos = [];
+  const stripe = (x, z, w, d) => {
+    const g = new THREE.PlaneGeometry(w, d);
+    g.rotateX(-Math.PI / 2);
+    g.translate(x, 0.035, z);
+    paintGeos.push(g);
+  };
+
+  for (let i = 0; i <= gridSize; i++) {
+    for (let j = 0; j <= gridSize; j++) {
+      const cx = roadCenter(i);
+      const cz = roadCenter(j);
+      const half = road / 2;
+      const bandOuter = half + 2.6; // зебра лежит за краем перекрёстка
+      const bars = 6;
+
+      // Переходы поперёк дороги с каждой стороны перекрёстка.
+      for (const sign of [1, -1]) {
+        for (let b = 0; b < bars; b++) {
+          const off = -half + 1.4 + ((road - 2.8) / (bars - 1)) * b;
+          // Зебра поперёк вертикальной дороги.
+          stripe(cx + off, cz + sign * bandOuter, 0.85, 3.2);
+          // Зебра поперёк горизонтальной дороги.
+          stripe(cx + sign * bandOuter, cz + off, 3.2, 0.85);
+        }
+        // Стоп-линии перед зебрами.
+        stripe(cx - sign * (half / 2), cz + sign * (bandOuter + 2.6), half - 1, 0.6);
+        stripe(cx + sign * (bandOuter + 2.6), cz + sign * (half / 2), 0.6, half - 1);
+      }
+    }
+  }
+
+  const paint = new THREE.Mesh(
+    mergeGeometries(paintGeos, false),
+    new THREE.MeshLambertMaterial({
+      color: 0xe8e4d6, transparent: true, opacity: 0.78, depthWrite: false,
+    }),
+  );
+  paint.receiveShadow = false;
+  paint.renderOrder = 1;
+  group.add(paint);
+  paintGeos.forEach((g) => g.dispose());
+
   // Световые пятна под фонарями — включаются ночью.
   const lampList = byType.get('lamp') || [];
   const poolGeo = new THREE.CircleGeometry(4.6, 14);
