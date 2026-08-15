@@ -1002,6 +1002,111 @@ export function foliageTexture(tint = '#4f6b35') {
   return tex;
 }
 
+/**
+ * Лицо персонажа: глаза, брови, нос и рот на прозрачном фоне.
+ * Клеится плоскостью на переднюю грань головы.
+ */
+export function faceTexture(skinColor = '#d9a17a', beard = false) {
+  const key = `face-${skinColor}-${beard}`;
+  if (cache.has(key)) return cache.get(key);
+  const S = 128;
+  const c = canvas(S, S);
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, S, S);
+
+  // Лёгкая тень по краям — лицо перестаёт быть плоской наклейкой.
+  const g = ctx.createRadialGradient(S / 2, S * 0.5, S * 0.15, S / 2, S * 0.5, S * 0.62);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(60,40,30,0.35)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, S, S);
+
+  // Брови.
+  ctx.fillStyle = 'rgba(45,32,24,0.9)';
+  ctx.fillRect(S * 0.2, S * 0.34, S * 0.22, S * 0.05);
+  ctx.fillRect(S * 0.58, S * 0.34, S * 0.22, S * 0.05);
+
+  // Глаза: белок, радужка, зрачок.
+  for (const ex of [S * 0.24, S * 0.62]) {
+    ctx.fillStyle = '#f2efe8';
+    ctx.fillRect(ex, S * 0.43, S * 0.14, S * 0.09);
+    ctx.fillStyle = '#3a5a72';
+    ctx.fillRect(ex + S * 0.04, S * 0.44, S * 0.06, S * 0.07);
+    ctx.fillStyle = '#15181c';
+    ctx.fillRect(ex + S * 0.055, S * 0.45, S * 0.03, S * 0.05);
+  }
+
+  // Нос — только тень сбоку, без геометрии.
+  ctx.fillStyle = 'rgba(90,60,45,0.28)';
+  ctx.fillRect(S * 0.47, S * 0.5, S * 0.06, S * 0.14);
+
+  // Рот.
+  ctx.fillStyle = 'rgba(120,70,60,0.85)';
+  ctx.fillRect(S * 0.38, S * 0.72, S * 0.24, S * 0.035);
+
+  if (beard) {
+    ctx.fillStyle = 'rgba(50,38,28,0.5)';
+    ctx.fillRect(S * 0.24, S * 0.62, S * 0.52, S * 0.3);
+    ctx.clearRect(S * 0.38, S * 0.7, S * 0.24, S * 0.06);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  cache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Куртка: молния, воротник, карманы и складки. Клеится на торс,
+ * поэтому рисуется бесшовной по горизонтали.
+ */
+export function clothTexture(baseColor = 0x2a2320, kind = 'jacket') {
+  const key = `cloth-${baseColor}-${kind}`;
+  if (cache.has(key)) return cache.get(key);
+  const W = 128, H = 128;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  const base = new THREE.Color(baseColor);
+  ctx.fillStyle = hex(baseColor);
+  ctx.fillRect(0, 0, W, H);
+
+  // Ткань: мелкие пятна освещённости.
+  for (let i = 0; i < 300; i++) {
+    const col = base.clone().multiplyScalar(0.85 + Math.random() * 0.3);
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = col.getStyle();
+    ctx.fillRect(Math.random() * W, Math.random() * H, 3, 3);
+  }
+  ctx.globalAlpha = 1;
+
+  if (kind === 'jacket') {
+    // Молния по центру и воротник.
+    ctx.fillStyle = 'rgba(20,20,22,0.85)';
+    ctx.fillRect(W / 2 - 2, 0, 4, H);
+    ctx.fillStyle = 'rgba(200,200,205,0.5)';
+    for (let y = 4; y < H; y += 6) ctx.fillRect(W / 2 - 1, y, 2, 3);
+    ctx.fillStyle = base.clone().multiplyScalar(0.75).getStyle();
+    ctx.fillRect(0, 0, W, H * 0.12);
+    // Карманы.
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(W * 0.16, H * 0.62, W * 0.2, 3);
+    ctx.fillRect(W * 0.64, H * 0.62, W * 0.2, 3);
+  } else if (kind === 'pants') {
+    // Боковой шов и складки у колена.
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(W * 0.12, 0, 2, H);
+    ctx.fillRect(W * 0.88, 0, 2, H);
+    for (let i = 0; i < 5; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${0.03 + Math.random() * 0.04})`;
+      ctx.fillRect(0, H * (0.5 + i * 0.07), W, 2);
+    }
+  }
+
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Циферблат башни: римские деления и стрелки. */
 export function clockFace() {
   if (cache.has('clock')) return cache.get('clock');

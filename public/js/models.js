@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { VEHICLES } from '/shared/protocol.js';
-import { signTexture, foliageTexture } from './textures.js';
+import { signTexture, foliageTexture, faceTexture, clothTexture } from './textures.js';
+import { assets } from './assets.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const mat = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
@@ -27,83 +28,141 @@ export function createCharacter(skinIndex = 0) {
   const s = SKINS[skinIndex % SKINS.length];
   const root = new THREE.Group();
 
-  const jacketM = mat(s.jacket);
-  const pantsM = mat(s.pants);
   const skinM = mat(s.skin);
+  const jacketM = new THREE.MeshLambertMaterial({ map: clothTexture(s.jacket, 'jacket') });
+  const jacketPlainM = mat(s.jacket);
+  const pantsM = new THREE.MeshLambertMaterial({ map: clothTexture(s.pants, 'pants') });
+  const shoeM = mat(0x17181a);
 
+  // Таз — корень всей анимации: от него растут ноги и корпус.
   const hips = new THREE.Group();
-  hips.position.y = 0.9;
+  hips.position.y = 0.92;
   root.add(hips);
 
-  const torso = new THREE.Mesh(box(0.5, 0.62, 0.28), jacketM);
-  torso.position.y = 0.31;
+  // --- корпус ---------------------------------------------------------------
+  const chest = new THREE.Group();
+  hips.add(chest);
+
+  const belly = new THREE.Mesh(box(0.42, 0.26, 0.24), jacketPlainM);
+  belly.position.y = 0.13;
+  belly.castShadow = true;
+  chest.add(belly);
+
+  const torso = new THREE.Mesh(box(0.5, 0.42, 0.27), jacketM);
+  torso.position.y = 0.47;
   torso.castShadow = true;
-  hips.add(torso);
+  chest.add(torso);
+
+  // Плечи чуть шире груди — силуэт перестаёт быть параллелепипедом.
+  const shoulders = new THREE.Mesh(box(0.62, 0.16, 0.28), jacketPlainM);
+  shoulders.position.y = 0.66;
+  shoulders.castShadow = true;
+  chest.add(shoulders);
 
   if (s.vest) {
-    const vest = new THREE.Mesh(box(0.54, 0.34, 0.32), mat(s.vest));
-    vest.position.y = 0.34;
-    torso.add(vest);
+    const vest = new THREE.Mesh(box(0.54, 0.36, 0.3), mat(s.vest));
+    vest.position.y = 0.46;
+    chest.add(vest);
   }
 
-  const neck = new THREE.Mesh(box(0.16, 0.08, 0.16), skinM);
-  neck.position.y = 0.66;
-  hips.add(neck);
+  const neck = new THREE.Mesh(box(0.14, 0.09, 0.14), skinM);
+  neck.position.y = 0.77;
+  chest.add(neck);
 
+  // --- голова ---------------------------------------------------------------
   const head = new THREE.Group();
-  head.position.y = 0.72;
-  hips.add(head);
-  const skull = new THREE.Mesh(box(0.26, 0.28, 0.26), skinM);
-  skull.position.y = 0.14;
+  head.position.y = 0.82;
+  chest.add(head);
+
+  const skull = new THREE.Mesh(box(0.24, 0.26, 0.24), skinM);
+  skull.position.y = 0.13;
   skull.castShadow = true;
   head.add(skull);
-  const hair = new THREE.Mesh(box(0.28, 0.09, 0.28), mat(s.hat || 0x2a2018));
-  hair.position.y = 0.29;
+
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.24, 0.26),
+    new THREE.MeshLambertMaterial({
+      map: faceTexture(undefined, skinIndex % 3 === 2),
+      transparent: true,
+      alphaTest: 0.05,
+    }),
+  );
+  face.position.set(0, 0.13, 0.121);
+  head.add(face);
+
+  const hair = new THREE.Mesh(box(0.26, 0.08, 0.26), mat(s.hat || 0x2a2018));
+  hair.position.y = 0.28;
   head.add(hair);
   if (s.hat) {
-    const cap = new THREE.Mesh(box(0.3, 0.06, 0.16), mat(s.hat));
-    cap.position.set(0, 0.26, 0.14);
+    const cap = new THREE.Mesh(box(0.27, 0.05, 0.14), mat(s.hat));
+    cap.position.set(0, 0.25, 0.14);
     head.add(cap);
   }
-  // Глаза, чтобы было видно, куда смотрит.
-  const eyeM = mat(0x1a1a1a);
-  for (const x of [-0.06, 0.06]) {
-    const eye = new THREE.Mesh(box(0.04, 0.04, 0.02), eyeM);
-    eye.position.set(x, 0.16, 0.135);
-    head.add(eye);
-  }
+  const ears = new THREE.Mesh(box(0.28, 0.06, 0.1), skinM);
+  ears.position.y = 0.13;
+  head.add(ears);
 
+  // --- конечности с суставами ----------------------------------------------
   function makeArm(side) {
-    const g = new THREE.Group();
-    g.position.set(side * 0.32, 0.56, 0);
-    const upper = new THREE.Mesh(box(0.14, 0.56, 0.16), jacketM);
-    upper.position.y = -0.28;
+    const shoulder = new THREE.Group();
+    shoulder.position.set(side * 0.33, 0.62, 0);
+    chest.add(shoulder);
+
+    const upper = new THREE.Mesh(box(0.13, 0.3, 0.15), jacketPlainM);
+    upper.position.y = -0.15;
     upper.castShadow = true;
-    g.add(upper);
-    const hand = new THREE.Mesh(box(0.12, 0.12, 0.14), skinM);
-    hand.position.y = -0.6;
-    g.add(hand);
-    hips.add(g);
-    return g;
+    shoulder.add(upper);
+
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.3;
+    shoulder.add(elbow);
+
+    const fore = new THREE.Mesh(box(0.115, 0.27, 0.13), jacketPlainM);
+    fore.position.y = -0.135;
+    fore.castShadow = true;
+    elbow.add(fore);
+
+    const hand = new THREE.Mesh(box(0.11, 0.12, 0.12), skinM);
+    hand.position.y = -0.31;
+    elbow.add(hand);
+
+    return { shoulder, elbow, hand };
   }
 
   function makeLeg(side) {
-    const g = new THREE.Group();
-    g.position.set(side * 0.13, 0, 0);
-    const leg = new THREE.Mesh(box(0.18, 0.86, 0.2), pantsM);
-    leg.position.y = -0.43;
-    leg.castShadow = true;
-    g.add(leg);
+    const hip = new THREE.Group();
+    hip.position.set(side * 0.125, 0, 0);
+    hips.add(hip);
+
+    const thigh = new THREE.Mesh(box(0.18, 0.44, 0.19), pantsM);
+    thigh.position.y = -0.22;
+    thigh.castShadow = true;
+    hip.add(thigh);
+
+    const knee = new THREE.Group();
+    knee.position.y = -0.44;
+    hip.add(knee);
+
+    const shin = new THREE.Mesh(box(0.155, 0.42, 0.17), pantsM);
+    shin.position.y = -0.21;
+    shin.castShadow = true;
+    knee.add(shin);
+
     if (s.stripes) {
-      const stripe = new THREE.Mesh(box(0.03, 0.8, 0.03), mat(0xf0f0f0));
-      stripe.position.set(side * 0.095, -0.43, 0);
-      g.add(stripe);
+      // Лампасы идут по обеим частям ноги, иначе рвутся на колене.
+      const st1 = new THREE.Mesh(box(0.025, 0.44, 0.025), mat(0xf0f0f0));
+      st1.position.set(side * 0.095, -0.22, 0);
+      hip.add(st1);
+      const st2 = new THREE.Mesh(box(0.025, 0.42, 0.025), mat(0xf0f0f0));
+      st2.position.set(side * 0.082, -0.21, 0);
+      knee.add(st2);
     }
-    const shoe = new THREE.Mesh(box(0.19, 0.12, 0.3), mat(0x141416));
-    shoe.position.set(0, -0.88, 0.04);
-    g.add(shoe);
-    hips.add(g);
-    return g;
+
+    const shoe = new THREE.Mesh(box(0.17, 0.11, 0.28), shoeM);
+    shoe.position.set(0, -0.47, 0.045);
+    knee.add(shoe);
+
+    return { hip, knee };
   }
 
   const armL = makeArm(-1);
@@ -113,60 +172,116 @@ export function createCharacter(skinIndex = 0) {
 
   // Оружие в правой руке.
   const weapon = new THREE.Group();
-  weapon.position.set(0, -0.58, 0.08);
-  armR.add(weapon);
-  const gunBody = new THREE.Mesh(box(0.07, 0.13, 0.3), mat(0x23262b));
-  gunBody.position.z = 0.1;
+  weapon.position.set(0, -0.3, 0.06);
+  armR.elbow.add(weapon);
+  const gunBody = new THREE.Mesh(box(0.06, 0.11, 0.26), mat(0x23262b));
+  gunBody.position.z = 0.09;
   weapon.add(gunBody);
+  const gunGrip = new THREE.Mesh(box(0.05, 0.12, 0.07), mat(0x1a1c1f));
+  gunGrip.position.set(0, -0.08, -0.01);
+  weapon.add(gunGrip);
   weapon.visible = false;
 
   root.userData = {
-    hips, head, armL, armR, legL, legR, weapon, torso,
+    hips, chest, head, armL, armR, legL, legR, weapon,
     phase: Math.random() * Math.PI * 2,
     skinIndex,
+    gltf: null,
+    action: null,
   };
+
+  // Если в манифесте есть модель персонажа — подменяем ею процедурное тело.
+  // Загрузка асинхронная, до её конца игрок видит обычного человечка.
+  if (assets.ready && assets.has('characters', 'ped')) {
+    assets.instance('characters', 'ped').then((inst) => {
+      if (!inst) return;
+      hips.visible = false;
+      root.add(inst.root);
+      root.userData.gltf = inst;
+    });
+  }
 
   root.update = (dt, state = {}) => {
     const d = root.userData;
     const speed = state.speed || 0;
     const moving = speed > 0.35;
-    d.phase += dt * (moving ? 2.2 + speed * 1.35 : 3.0);
+    const run = Math.min(1, speed / 6);
 
-    const swing = moving ? Math.min(1, speed / 5) : 0;
-    const sw = Math.sin(d.phase) * (0.55 + swing * 0.55) * (moving ? 1 : 0);
+    // Модель со скелетом: состояние игры переключает клипы, а не суставы.
+    if (d.gltf) {
+      const want = state.dead ? 'die'
+        : state.sitting ? 'sit'
+          : state.aiming ? 'aim'
+            : speed > 4 ? 'run'
+              : moving ? 'walk' : 'idle';
+      const actions = d.gltf.actions;
+      const next = actions[want] || actions.idle || null;
+      if (next && next !== d.action) {
+        next.reset().fadeIn(0.18).play();
+        if (d.action) d.action.fadeOut(0.18);
+        d.action = next;
+      }
+      d.gltf.mixer?.update(dt);
+      return;
+    }
+    d.phase += dt * (moving ? 3.6 + speed * 1.1 : 1.6);
 
-    legL.rotation.x = sw;
-    legR.rotation.x = -sw;
+    const sw = Math.sin(d.phase);
+    const swAbs = Math.abs(sw);
+    const amp = moving ? 0.5 + run * 0.45 : 0;
+
+    // Ноги: бедро качается, колено сгибается только на подъёме.
+    legL.hip.rotation.x = sw * amp;
+    legR.hip.rotation.x = -sw * amp;
+    legL.knee.rotation.x = -Math.max(0, -sw) * (0.5 + run * 0.9) - (moving ? 0.06 : 0.02);
+    legR.knee.rotation.x = -Math.max(0, sw) * (0.5 + run * 0.9) - (moving ? 0.06 : 0.02);
 
     if (state.aiming) {
-      armR.rotation.x = -Math.PI / 2 + (state.pitch || 0) * 0.6;
-      armR.rotation.z = -0.12;
-      armL.rotation.x = -Math.PI / 2.4;
-      armL.rotation.z = 0.3;
+      // Стойка с оружием: правая рука вперёд, левая поддерживает.
+      armR.shoulder.rotation.set(-Math.PI / 2 + (state.pitch || 0) * 0.7, 0, -0.1);
+      armR.elbow.rotation.x = -0.12;
+      armL.shoulder.rotation.set(-Math.PI / 2.1 + (state.pitch || 0) * 0.6, 0, 0.34);
+      armL.elbow.rotation.x = -0.55;
       weapon.visible = state.weapon && state.weapon !== 'fists';
     } else {
-      armR.rotation.x = -sw * 0.75;
-      armL.rotation.x = sw * 0.75;
-      armR.rotation.z = 0;
-      armL.rotation.z = 0;
+      armR.shoulder.rotation.set(-sw * amp * 0.85, 0, -0.06);
+      armL.shoulder.rotation.set(sw * amp * 0.85, 0, 0.06);
+      // Локоть всегда чуть согнут — прямая рука выглядит как палка.
+      armR.elbow.rotation.x = -0.22 - Math.max(0, -sw) * amp * 0.7;
+      armL.elbow.rotation.x = -0.22 - Math.max(0, sw) * amp * 0.7;
       weapon.visible = false;
     }
 
-    // Лёгкое покачивание корпуса.
-    hips.position.y = 0.9 + (moving ? Math.abs(Math.sin(d.phase)) * 0.045 : Math.sin(d.phase * 0.5) * 0.012);
-    torso.rotation.x = moving ? 0.08 + swing * 0.12 : 0.02;
-    head.rotation.x = THREE.MathUtils.clamp(state.pitch || 0, -0.6, 0.6);
+    // Корпус: наклон вперёд на бегу, покачивание таза в такт шагам.
+    chest.rotation.x = (moving ? 0.06 + run * 0.22 : 0.02) + (state.aiming ? 0.05 : 0);
+    chest.rotation.z = moving ? -sw * 0.05 * run : 0;
+    hips.rotation.y = moving ? sw * 0.09 * run : 0;
+    hips.position.y = 0.92 + (moving ? swAbs * 0.05 * (0.5 + run) : Math.sin(d.phase * 0.6) * 0.008);
+
+    // Голова смотрит туда же, куда камера, но не выворачивается.
+    head.rotation.x = THREE.MathUtils.clamp((state.pitch || 0) * 0.8, -0.5, 0.5) - chest.rotation.x;
 
     if (state.sitting) {
-      legL.rotation.x = -1.35;
-      legR.rotation.x = -1.35;
-      armL.rotation.x = -0.9;
-      armR.rotation.x = -0.9;
-      hips.position.y = 0.86;
+      legL.hip.rotation.x = -1.4;
+      legR.hip.rotation.x = -1.4;
+      legL.knee.rotation.x = -1.5;
+      legR.knee.rotation.x = -1.5;
+      armL.shoulder.rotation.set(-0.9, 0, 0.2);
+      armR.shoulder.rotation.set(-0.9, 0, -0.2);
+      armL.elbow.rotation.x = -0.6;
+      armR.elbow.rotation.x = -0.6;
+      chest.rotation.x = 0.08;
+      hips.position.y = 0.88;
     }
+
     if (state.dead) {
       root.rotation.x = -Math.PI / 2.1;
-      hips.position.y = 0.35;
+      hips.position.y = 0.32;
+      chest.rotation.x = 0;
+      legL.knee.rotation.x = -0.3;
+      legR.knee.rotation.x = -0.5;
+      armL.shoulder.rotation.set(0.4, 0, 0.9);
+      armR.shoulder.rotation.set(0.2, 0, -1.1);
     } else {
       root.rotation.x = 0;
     }

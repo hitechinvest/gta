@@ -12,10 +12,12 @@ const targets = [
   ['node_modules/three/build/three.module.js', 'public/vendor/three.module.js'],
   ['node_modules/three/examples/jsm/utils/BufferGeometryUtils.js', 'public/vendor/BufferGeometryUtils.js'],
   ...PP.map((n) => [`node_modules/three/examples/jsm/postprocessing/${n}.js`, `public/vendor/postprocessing/${n}.js`]),
+  ['node_modules/three/examples/jsm/loaders/GLTFLoader.js', 'public/vendor/loaders/GLTFLoader.js'],
+  ['node_modules/three/examples/jsm/utils/BufferGeometryUtils.js', 'public/vendor/utils/BufferGeometryUtils.js'],
   ...SHADERS.map((n) => [`node_modules/three/examples/jsm/shaders/${n}.js`, `public/vendor/shaders/${n}.js`]),
 ];
 
-for (const dir of ['public/vendor', 'public/vendor/postprocessing', 'public/vendor/shaders']) {
+for (const dir of ['public/vendor', 'public/vendor/postprocessing', 'public/vendor/shaders', 'public/vendor/loaders', 'public/vendor/utils']) {
   mkdirSync(resolve(root, dir), { recursive: true });
 }
 

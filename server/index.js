@@ -23,8 +23,10 @@ function ensureVendorFiles() {
     ['node_modules/three/examples/jsm/utils/BufferGeometryUtils.js', 'public/vendor/BufferGeometryUtils.js'],
     ...pp.map((n) => [`node_modules/three/examples/jsm/postprocessing/${n}.js`, `public/vendor/postprocessing/${n}.js`]),
     ...shaders.map((n) => [`node_modules/three/examples/jsm/shaders/${n}.js`, `public/vendor/shaders/${n}.js`]),
+    ['node_modules/three/examples/jsm/loaders/GLTFLoader.js', 'public/vendor/loaders/GLTFLoader.js'],
+    ['node_modules/three/examples/jsm/utils/BufferGeometryUtils.js', 'public/vendor/utils/BufferGeometryUtils.js'],
   ];
-  for (const dir of ['public/vendor', 'public/vendor/postprocessing', 'public/vendor/shaders']) {
+  for (const dir of ['public/vendor', 'public/vendor/postprocessing', 'public/vendor/shaders', 'public/vendor/loaders', 'public/vendor/utils']) {
     fs.mkdirSync(path.join(ROOT, dir), { recursive: true });
   }
   for (const [from, to] of pairs) {

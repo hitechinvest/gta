@@ -18,6 +18,7 @@ import { sfx } from './audio.js';
 import { SKINS } from './models.js';
 import { Sky } from './sky.js';
 import { PostFX } from './postfx.js';
+import { assets } from './assets.js';
 
 const DAY_LENGTH = 600; // секунд на полный цикл суток
 
@@ -118,6 +119,9 @@ async function start(name, skin) {
     });
     game.net.send({ t: 'join', name, skin });
   });
+
+  loadingText.textContent = 'Ищем модели…';
+  await assets.init();
 
   loadingText.textContent = 'Строим город…';
   await nextFrame();
