@@ -62,10 +62,9 @@ async function overpass() {
   for (const url of ENDPOINTS) {
     process.stdout.write(`[osm] запрос к ${new URL(url).host}… `);
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ data: QUERY }),
+      // Через прокси POST на Overpass возвращает 406, GET проходит.
+      const res = await fetch(`${url}?${new URLSearchParams({ data: QUERY })}`, {
+        headers: { Accept: 'application/json' },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
