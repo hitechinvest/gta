@@ -30,6 +30,9 @@ const FLEMISH_COLORS = [0xa8443a, 0x8f3b33, 0xb85a45, 0x9c4a3c, 0xc06a4e, 0x7e3a
 const ROOF_TILE_COLORS = [0x5a4038, 0x6b4a3a, 0x4a3630, 0x7a5240];
 
 // Цвета: выцветшие панели, охра сталинок, силикатный кирпич.
+// Хрущёвки: силикатный кирпич, выцветшая штукатурка, серая панель.
+const KHRUSHCHEVKA_COLORS = [0xdcd7c2, 0xe0dcc8, 0xc9c4ae, 0xd4c9a8, 0xcfd2cc, 0xe2d9bd];
+
 const PANEL_COLORS = [0xc9c3b4, 0xb9bfc0, 0xd3cbb8, 0xa9b2ae, 0xc4b9a6, 0xbfc7cc];
 const STALINKA_COLORS = [0xd9b26a, 0xc98f5f, 0xd8c39a, 0xbf8b62, 0xd6cba8];
 const FACTORY_COLORS = [0x9b8f80, 0x8c9298, 0xa3927f];
@@ -156,6 +159,54 @@ function buildFlemishBlock(rng, x0, z0, size, out, props) {
     });
   }
   props.push({ type: 'bench', x: x0 + size / 2, z: z0 + size / 2, rot: rng() * Math.PI, scale: 1 });
+}
+
+/**
+ * Квартал хрущёвок: два-три длинных пятиэтажных дома параллельно,
+ * между ними двор с сушилками и лавками. Классика 60-х.
+ */
+function buildKhrushchevkaBlock(rng, x0, z0, size, out, props) {
+  const horizontal = rng() < 0.5;
+  const rows = rng() < 0.55 ? 2 : 3;
+  const gap = size / rows;
+  const brick = rng() < 0.5; // силикатный кирпич или панель
+
+  for (let r = 0; r < rows; r++) {
+    const floors = 5;
+    const h = floors * 2.8 + 1.1;
+    const long = size - 10 - rng() * 8;
+    const thick = 11.5;
+    const jitter = (rng() - 0.5) * 3;
+    const b = horizontal
+      ? { x: x0 + size / 2 + jitter, z: z0 + gap * r + gap / 2, w: long, d: thick }
+      : { x: x0 + gap * r + gap / 2, z: z0 + size / 2 + jitter, w: thick, d: long };
+
+    out.push({
+      kind: 'khrushchevka',
+      x: b.x, z: b.z, w: b.w, d: b.d, h,
+      floors,
+      color: pick(rng, KHRUSHCHEVKA_COLORS),
+      brick,
+      entrances: Math.max(3, Math.round((horizontal ? b.w : b.d) / 13)),
+      horizontal,
+      sign: rng() < 0.25 ? pick(rng, SHOP_SIGNS) : '',
+    });
+  }
+
+  // Двор: лавки, сушилка, тополя вдоль торцов.
+  const cx = x0 + size / 2;
+  const cz = z0 + size / 2;
+  props.push({ type: 'carpetBeater', x: cx + (rng() - 0.5) * 12, z: cz + (rng() - 0.5) * 12, rot: rng() * Math.PI, scale: 1 });
+  props.push({ type: 'bench', x: cx + 6, z: cz - 6, rot: rng() * Math.PI, scale: 1 });
+  props.push({ type: 'trash', x: x0 + 6, z: z0 + 6, rot: 0, scale: 1 });
+  for (let t = 0; t < 7; t++) {
+    props.push({
+      type: rng() < 0.6 ? 'poplar' : 'birch',
+      x: x0 + 5 + rng() * (size - 10),
+      z: z0 + 5 + rng() * (size - 10),
+      rot: rng() * Math.PI * 2, scale: 0.85 + rng() * 0.5,
+    });
+  }
 }
 
 /** Спальный микрорайон: длинные панельки, двор с площадкой. */
@@ -368,12 +419,13 @@ export function generateWorld(seed = 1337) {
 
       if (ring === 0) kind = 'square';
       else if (ring === 1) kind = rng() < 0.75 ? 'flemish' : 'stalinka';
-      else if (ring === 2) kind = rng() < 0.6 ? 'panel' : rng() < 0.5 ? 'flemish' : 'stalinka';
+      else if (ring === 2) kind = rng() < 0.45 ? 'khrushchevka' : rng() < 0.55 ? 'panel' : rng() < 0.5 ? 'flemish' : 'stalinka';
       else {
         const r = rng();
         if (r < 0.3) kind = 'factory';
         else if (r < 0.5) kind = 'garage';
-        else if (r < 0.75) kind = 'private';
+        else if (r < 0.7) kind = 'private';
+        else if (r < 0.88) kind = 'khrushchevka';
         else kind = 'panel';
       }
 
@@ -382,6 +434,7 @@ export function generateWorld(seed = 1337) {
       switch (kind) {
         case 'square': buildSquare(rng, x, z, block, buildings, props); break;
         case 'flemish': buildFlemishBlock(rng, x, z, block, buildings, props); break;
+        case 'khrushchevka': buildKhrushchevkaBlock(rng, x, z, block, buildings, props); break;
         case 'stalinka': buildStalinkaBlock(rng, x, z, block, buildings, props); break;
         case 'panel': buildPanelBlock(rng, x, z, block, buildings, props); break;
         case 'factory': buildFactoryBlock(rng, x, z, block, buildings, props); break;

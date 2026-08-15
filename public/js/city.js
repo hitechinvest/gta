@@ -5,7 +5,7 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { CONFIG, roadCenter, snapToRoad } from '/shared/worldgen.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
-  flemishFacade, brickWall, asphalt, sidewalkTex, groundTex, signTexture,
+  flemishFacade, brickWall, khrushchevkaFacade, asphalt, sidewalkTex, groundTex, signTexture,
   facadeLights, normalFromTexture, clockFace,
 } from './textures.js';
 import { propPrototypes, churchDomes, columns } from './models.js';
@@ -14,6 +14,7 @@ const FACADE_TILE = {
   panel: [6.4, 5.8], tower: [6.4, 5.8], stalinka: [7.2, 7.2], factory: [12, 9],
   private: [6, 5], garage: [4, 3], church: [8, 8], admin: [7.2, 7.2], chimney: [8, 8],
   flemish: [5.6, 3.5], kremlinWall: [5, 5], kremlinTower: [5, 5], clockTower: [6, 6],
+  khrushchevka: [6.5, 5.6],
 };
 
 function facadeTexture(b) {
@@ -24,6 +25,7 @@ function facadeTexture(b) {
     case 'private': return privateFacade(b.color);
     case 'garage': return garageFacade(b.color);
     case 'flemish': case 'clockTower': return flemishFacade(b.color);
+    case 'khrushchevka': return khrushchevkaFacade(b.color, b.brick);
     case 'kremlinWall': case 'kremlinTower': return brickWall(b.color);
     default: return panelFacade(b.color, false);
   }
@@ -49,6 +51,32 @@ function stepGable(b, geos) {
   const cap = new THREE.BoxGeometry(1.1, 1.6, 1.1);
   cap.translate(b.x, b.h + steps * stepH + 1.5, b.z);
   geos.push(cap);
+}
+
+/**
+ * Подъезды хрущёвки: бетонный козырёк и ступеньки вдоль длинной стороны.
+ * Мелочь, но именно она делает дом жилым, а не коробкой с окнами.
+ */
+function entrances(b, geos) {
+  const count = b.entrances || 4;
+  const alongX = b.w > b.d;
+  const len = alongX ? b.w : b.d;
+  const step = len / count;
+  const depth = alongX ? b.d : b.w;
+
+  for (let i = 0; i < count; i++) {
+    const offset = -len / 2 + step * (i + 0.5);
+    const px = b.x + (alongX ? offset : depth / 2 + 0.55);
+    const pz = b.z + (alongX ? depth / 2 + 0.55 : offset);
+
+    const canopy = new THREE.BoxGeometry(alongX ? 2.6 : 1.5, 0.22, alongX ? 1.5 : 2.6);
+    canopy.translate(px, 2.75, pz);
+    geos.push(canopy);
+
+    const stoop = new THREE.BoxGeometry(alongX ? 2.2 : 1.2, 0.4, alongX ? 1.2 : 2.2);
+    stoop.translate(px, 0.2, pz);
+    geos.push(stoop);
+  }
 }
 
 /** Зубцы «ласточкин хвост» поверх кремлёвской стены. */
@@ -207,6 +235,7 @@ export function buildCity(scene, world, quality = 'high') {
     // Фламандский фронтон и кремлёвские зубцы — той же кладкой.
     if (b.kind === 'flemish' && b.gable) stepGable(b, bucket.geos);
     if (b.kind === 'kremlinWall' || b.kind === 'kremlinTower') crenellations(b, bucket.geos);
+    if (b.kind === 'khrushchevka') entrances(b, roofGeos);
 
     if (b.kind === 'flemish') {
       // Черепичная кровля вместо плоской плиты.

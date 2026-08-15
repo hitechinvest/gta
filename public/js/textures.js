@@ -124,6 +124,104 @@ export function panelFacade(baseColor = 0xc9c3b4, withBalcony = true) {
   return tex;
 }
 
+/**
+ * Хрущёвка: силикатный кирпич или мелкая панель, три окна на секцию,
+ * открытые балконы с решёткой. Тайл = 2 этажа, 1 секция.
+ */
+export function khrushchevkaFacade(baseColor = 0xd8d3c0, brick = true) {
+  const key = `khrush-${baseColor}-${brick}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const W = 256, H = 256;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  const base = new THREE.Color(baseColor);
+  ctx.fillStyle = hex(baseColor);
+  ctx.fillRect(0, 0, W, H);
+
+  if (brick) {
+    // Силикатная кладка: кирпич крупный, шов светлый.
+    const bh = 8;
+    const bw = 22;
+    for (let row = 0, y = 0; y < H; row++, y += bh) {
+      const off = (row % 2) * (bw / 2);
+      for (let x = -bw; x < W + bw; x += bw) {
+        const col = base.clone().multiplyScalar(0.9 + Math.random() * 0.2);
+        ctx.fillStyle = col.getStyle();
+        ctx.fillRect(x + off + 1, y + 1, bw - 2, bh - 2);
+      }
+    }
+  } else {
+    // Панельный вариант: швы плит по два этажа.
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.lineWidth = 2;
+    for (let y = 0; y <= H; y += H / 2) {
+      ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+  }
+
+  const floorH = H / 2;
+  for (let f = 0; f < 2; f++) {
+    const y0 = f * floorH;
+    const winY = y0 + floorH * 0.26;
+    const winH = floorH * 0.38;
+
+    // Три небольших окна: два жилых и кухонное поменьше.
+    const wins = [
+      { x: W * 0.07, w: W * 0.2 },
+      { x: W * 0.33, w: W * 0.2 },
+      { x: W * 0.78, w: W * 0.15 },
+    ];
+    for (const win of wins) {
+      ctx.fillStyle = '#2f3a44';
+      ctx.fillRect(win.x, winY, win.w, winH);
+      ctx.strokeStyle = 'rgba(238,236,228,0.85)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(win.x, winY, win.w, winH);
+      ctx.beginPath();
+      ctx.moveTo(win.x + win.w * 0.62, winY);
+      ctx.lineTo(win.x + win.w * 0.62, winY + winH);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(165,195,215,0.2)';
+      ctx.fillRect(win.x + 2, winY + 2, win.w * 0.5, winH * 0.45);
+      // Отлив.
+      ctx.fillStyle = 'rgba(120,120,115,0.75)';
+      ctx.fillRect(win.x - 2, winY + winH, win.w + 4, 4);
+    }
+
+    // Открытый балкон с решёткой — та самая примета хрущёвки.
+    const bx = W * 0.56;
+    const bw = W * 0.18;
+    ctx.fillStyle = 'rgba(150,148,140,0.95)';
+    ctx.fillRect(bx - 5, winY + winH * 0.15, bw + 10, winH * 0.85);
+    ctx.fillStyle = '#3b4550';
+    ctx.fillRect(bx, winY, bw * 0.55, winH); // балконная дверь
+    ctx.strokeStyle = 'rgba(90,95,90,0.9)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= 6; i++) {
+      const gx = bx - 5 + ((bw + 10) / 6) * i;
+      ctx.beginPath();
+      ctx.moveTo(gx, winY + winH * 0.2);
+      ctx.lineTo(gx, winY + winH);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(110,112,105,0.95)';
+    ctx.fillRect(bx - 7, winY + winH, bw + 14, 6);
+  }
+
+  // Потёки под окнами и общая усталость фасада.
+  for (let i = 0; i < 45; i++) {
+    ctx.fillStyle = `rgba(120,115,100,${0.03 + Math.random() * 0.06})`;
+    ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 6 + Math.random() * 30);
+  }
+
+  noise(ctx, W, H, 22);
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Фасад сталинки: охра, высокие окна, карнизы. */
 export function stalinkaFacade(baseColor = 0xd9b26a) {
   const key = `stalinka-${baseColor}`;
