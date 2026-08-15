@@ -174,12 +174,30 @@ nginx -t && systemctl reload nginx
 # --- 5. Сертификат ----------------------------------------------------------
 if [ ! -f "${LE_LIVE}/fullchain.pem" ]; then
   say "Выпускаем сертификат для ${FQDN}"
-  if certbot certonly --webroot -w "${ACME_ROOT}" -d "${FQDN}" \
-      --non-interactive --agree-tos -m "admin@${FQDN#*.}" --keep-until-expiring; then
+  # У certbot глобальный лок: если платформа в этот момент провижинит сайт,
+  # запуск падает. Пробуем несколько раз, ошибку показываем целиком.
+  CERT_OK=0
+  for attempt in 1 2 3; do
+    if certbot certonly --webroot -w "${ACME_ROOT}" -d "${FQDN}" \
+        --non-interactive --agree-tos -m "admin@${FQDN#*.}" --keep-until-expiring; then
+      CERT_OK=1
+      break
+    fi
+    echo "Попытка ${attempt} не удалась, ждём 20 с…"
+    sleep 20
+  done
+
+  if [ "$CERT_OK" -eq 1 ]; then
     write_vhost_ssl
     nginx -t && systemctl reload nginx
   else
-    echo "Сертификат выпустить не удалось — сайт пока работает по http://"
+    echo
+    echo "!!! Сертификат выпустить не удалось. Сайт работает по http://${FQDN}"
+    echo "Последние строки лога certbot:"
+    tail -n 25 /var/log/letsencrypt/letsencrypt.log 2>/dev/null || true
+    echo
+    echo "Разберитесь с причиной и запустите этот же скрипт повторно —"
+    echo "он допишет https-конфиг, как только сертификат появится."
   fi
 fi
 
