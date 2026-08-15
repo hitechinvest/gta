@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Сетевая браузерная 3D мини-GTA: российский город, машины, ДПС и погони.">
+<title>РАЙОНЫ — сетевая 3D мини-GTA</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+<link rel="stylesheet" href="/css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- Прицел -->
+<div id="crosshair"><span></span><span></span><span></span><span></span></div>
+<div id="damage-flash"></div>
+<div id="hud-toast"></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-top-left">
+    <div class="bars">
+      <div class="bar-row">
+        <span class="bar-label">HP</span>
+        <div class="bar"><i id="hud-health" class="fill health"></i></div>
+        <span id="hud-health-text" class="bar-value">100</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">БР</span>
+        <div class="bar"><i id="hud-armor" class="fill armor"></i></div>
+        <span id="hud-armor-text" class="bar-value">0</span>
+      </div>
+    </div>
+    <div id="hud-street" class="street">ул. Ленина</div>
+  </div>
+
+  <div class="hud-top-right">
+    <div id="hud-wanted" class="wanted"></div>
+    <div id="hud-money" class="money">500 ₽</div>
+    <div id="hud-stats" class="stats">—</div>
+  </div>
+
+  <div class="hud-bottom-right">
+    <div id="hud-speed" class="speedo">
+      <div id="hud-car-name" class="car-name">Жигули</div>
+      <div class="speed-line"><span id="hud-speed-value">0</span><small>км/ч</small></div>
+      <div class="car-bar"><i id="hud-car-health"></i></div>
+    </div>
+    <div class="weapon">
+      <div id="hud-weapon-name">ПМ</div>
+      <div id="hud-ammo">8 / 40</div>
+    </div>
+  </div>
+
+  <div class="hud-bottom-left">
+    <canvas id="minimap" width="176" height="176"></canvas>
+  </div>
+
+  <div id="killfeed"></div>
+  <div id="hud-hint" class="hint"></div>
+
+  <div id="chat">
+    <div id="chat-log"></div>
+    <form id="chat-form" autocomplete="off">
+      <input id="chat-input" type="text" maxlength="120" placeholder="Сообщение… (Enter — отправить, Esc — отмена)">
+    </form>
+  </div>
+</div>
+
+<!-- Таблица игроков -->
+<div id="scoreboard">
+  <h3>Игроки в сети</h3>
+  <table>
+    <thead><tr><th>Игрок</th><th>Убийств</th><th>Смертей</th><th>Розыск</th><th>Пинг</th></tr></thead>
+    <tbody id="scoreboard-body"></tbody>
+  </table>
+  <p class="hint-small">Удерживайте Tab, чтобы видеть таблицу</p>
+</div>
+
+<!-- Экран смерти -->
+<div id="death-screen">
+  <h2>ВАС УБИЛИ</h2>
+  <p>Возрождение через <span id="death-timer">5</span> с</p>
+</div>
+
+<!-- Сенсорное управление -->
+<div id="touch-ui">
+  <div id="touch-stick"><div id="touch-knob"></div></div>
+  <div id="touch-look"></div>
+  <div class="touch-buttons">
+    <button id="btn-aim" class="tbtn">Прицел</button>
+    <button id="btn-fire" class="tbtn fire">Огонь</button>
+    <button id="btn-enter" class="tbtn">В машину</button>
+    <button id="btn-jump" class="tbtn">Прыжок</button>
+    <button id="btn-brake" class="tbtn">Тормоз</button>
+  </div>
+</div>
+
+<!-- Меню входа -->
+<div id="menu">
+  <div class="menu-card">
+    <h1>РАЙОНЫ</h1>
+    <p class="tagline">Сетевая 3D мини-GTA. Российский город: панельки, сталинки, гаражи и ДПС.</p>
+
+    <label class="field">
+      <span>Ваш ник</span>
+      <input id="name-input" type="text" maxlength="16" placeholder="Игрок" autocomplete="off">
+    </label>
+
+    <div class="field">
+      <span>Внешний вид</span>
+      <div id="skin-picker" class="skins"></div>
+    </div>
+
+    <button id="play-btn" class="play">В ИГРУ</button>
+    <div id="menu-status" class="status">Проверяем сервер…</div>
+
+    <div class="controls">
+      <h4>Управление</h4>
+      <ul>
+        <li><b>W A S D</b> — движение, <b>Shift</b> — бег</li>
+        <li><b>Мышь</b> — камера, <b>ПКМ</b> — прицел, <b>ЛКМ</b> — огонь</li>
+        <li><b>F</b> — сесть в машину / выйти, <b>Пробел</b> — прыжок / ручник</li>
+        <li><b>1–4</b> — оружие, <b>R</b> — перезарядка, <b>G</b> — колесо мыши</li>
+        <li><b>T</b> или <b>Enter</b> — чат, <b>Tab</b> — таблица, <b>M</b> — вращение карты</li>
+        <li><b>H</b> — сигнал, <b>L</b> — фары, <b>Esc</b> — курсор</li>
+      </ul>
+      <p class="warn">Стрельба и наезды повышают уровень розыска — ДПС приедет быстро.</p>
+    </div>
+  </div>
+</div>
+
+<div id="loading"><div class="spinner"></div><span id="loading-text">Строим город…</span></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

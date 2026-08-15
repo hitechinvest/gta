@@ -1,0 +1,21 @@
+{
+  "name": "gta-mini",
+  "version": "1.0.0",
+  "description": "Network 3D browser mini-game in the spirit of GTA: city, cars, shooting, multiplayer",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "postinstall": "node scripts/vendor.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "three": "^0.169.0",
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}
