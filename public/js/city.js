@@ -5,7 +5,7 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import { CONFIG, roadCenter, snapToRoad } from '/shared/worldgen.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
-  flemishFacade, brickWall, khrushchevkaFacade, asphalt, sidewalkTex, groundTex, signTexture,
+  flemishFacade, brickWall, khrushchevkaFacade, series125Facade, asphalt, sidewalkTex, groundTex, signTexture,
   facadeLights, normalFromTexture, clockFace,
 } from './textures.js';
 import { propPrototypes, churchDomes, columns } from './models.js';
@@ -14,7 +14,7 @@ const FACADE_TILE = {
   panel: [6.4, 5.8], tower: [6.4, 5.8], stalinka: [7.2, 7.2], factory: [12, 9],
   private: [6, 5], garage: [4, 3], church: [8, 8], admin: [7.2, 7.2], chimney: [8, 8],
   flemish: [5.6, 3.5], kremlinWall: [5, 5], kremlinTower: [5, 5], clockTower: [6, 6],
-  khrushchevka: [6.5, 5.6],
+  khrushchevka: [6.5, 5.6], series125: [7, 5.8],
 };
 
 function facadeTexture(b) {
@@ -26,6 +26,7 @@ function facadeTexture(b) {
     case 'garage': return garageFacade(b.color);
     case 'flemish': case 'clockTower': return flemishFacade(b.color);
     case 'khrushchevka': return khrushchevkaFacade(b.color, b.brick);
+    case 'series125': return series125Facade(b.color, b.accent);
     case 'kremlinWall': case 'kremlinTower': return brickWall(b.color);
     default: return panelFacade(b.color, false);
   }
@@ -76,6 +77,41 @@ function entrances(b, geos) {
     const stoop = new THREE.BoxGeometry(alongX ? 2.2 : 1.2, 0.4, alongX ? 1.2 : 2.2);
     stoop.translate(px, 0.2, pz);
     geos.push(stoop);
+  }
+}
+
+/**
+ * Парапеты лоджий серии 125: на фасаде они нарисованы, но без выступающих
+ * плит дом остаётся плоской картинкой — тени от них и дают объём.
+ */
+function loggiaParapets(b, geos) {
+  const sections = b.sections || 4;
+  const alongX = b.w > b.d;
+  const len = alongX ? b.w : b.d;
+  const depth = alongX ? b.d : b.w;
+  const step = len / sections;
+  const floorH = b.h / (b.floors || 9);
+  const slabW = step * 0.42;
+
+  for (let s = 0; s < sections; s++) {
+    const offset = -len / 2 + step * (s + 0.72);
+    for (let f = 1; f < (b.floors || 9); f++) {
+      const y = f * floorH + floorH * 0.32;
+      // По обе стороны дома: лоджии выходят на оба фасада.
+      for (const side of [1, -1]) {
+        const g = new THREE.BoxGeometry(
+          alongX ? slabW : 0.36,
+          floorH * 0.4,
+          alongX ? 0.36 : slabW,
+        );
+        g.translate(
+          b.x + (alongX ? offset : side * (depth / 2 + 0.12)),
+          y,
+          b.z + (alongX ? side * (depth / 2 + 0.12) : offset),
+        );
+        geos.push(g);
+      }
+    }
   }
 }
 
@@ -195,6 +231,7 @@ export function buildCity(scene, world, quality = 'high') {
   // --- дома ----------------------------------------------------------------
   const byMaterial = new Map(); // ключ -> {material, geos[]}
   const roofGeos = [];
+  const concreteGeos = []; // козырьки подъездов и парапеты лоджий
   const tileRoofs = new Map(); // цвет черепицы -> геометрии
   const signMeshes = [];
 
@@ -235,7 +272,8 @@ export function buildCity(scene, world, quality = 'high') {
     // Фламандский фронтон и кремлёвские зубцы — той же кладкой.
     if (b.kind === 'flemish' && b.gable) stepGable(b, bucket.geos);
     if (b.kind === 'kremlinWall' || b.kind === 'kremlinTower') crenellations(b, bucket.geos);
-    if (b.kind === 'khrushchevka') entrances(b, roofGeos);
+    if (b.kind === 'khrushchevka') entrances(b, concreteGeos);
+    if (b.kind === 'series125') loggiaParapets(b, concreteGeos);
 
     if (b.kind === 'flemish') {
       // Черепичная кровля вместо плоской плиты.
@@ -347,6 +385,19 @@ export function buildCity(scene, world, quality = 'high') {
   roofMesh.castShadow = true;
   roofMesh.receiveShadow = true;
   group.add(roofMesh);
+
+  if (concreteGeos.length) {
+    const concrete = new THREE.Mesh(
+      mergeGeometries(concreteGeos, false),
+      rich
+        ? new THREE.MeshStandardMaterial({ color: 0xb7b4ab, roughness: 0.95, metalness: 0.02 })
+        : new THREE.MeshLambertMaterial({ color: 0xb7b4ab }),
+    );
+    concrete.castShadow = true;
+    concrete.receiveShadow = true;
+    group.add(concrete);
+    concreteGeos.forEach((g) => g.dispose());
+  }
 
   // Черепица и шатры — свой цвет на каждую группу.
   for (const [color, geos] of tileRoofs) {

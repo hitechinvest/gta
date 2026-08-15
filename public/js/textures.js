@@ -222,6 +222,90 @@ export function khrushchevkaFacade(baseColor = 0xd8d3c0, brick = true) {
   return tex;
 }
 
+/**
+ * Панельная девятиэтажка серии 125: крупные панели с рустованной фактурой,
+ * спаренные окна и утопленная лоджия с бетонным парапетом.
+ * Тайл = 2 этажа, 1 секция.
+ */
+export function series125Facade(baseColor = 0xc6c2b2, accent = 0x8fa2a8) {
+  const key = `s125-${baseColor}-${accent}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const W = 256, H = 256;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = hex(baseColor);
+  ctx.fillRect(0, 0, W, H);
+
+  // Рустованная фактура панели — мелкая вертикальная бороздка.
+  ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 6) {
+    ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); ctx.stroke();
+  }
+
+  const floorH = H / 2;
+  for (let f = 0; f < 2; f++) {
+    const y0 = f * floorH;
+
+    // Шов между панелями: горизонтальный на каждом этаже.
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(0, y0, W, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.fillRect(0, y0 + 3, W, 2);
+
+    const winY = y0 + floorH * 0.24;
+    const winH = floorH * 0.42;
+
+    // Спаренное окно комнаты.
+    const wx = W * 0.06;
+    const ww = W * 0.34;
+    ctx.fillStyle = '#2c3742';
+    ctx.fillRect(wx, winY, ww, winH);
+    ctx.strokeStyle = 'rgba(236,234,226,0.9)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(wx, winY, ww, winH);
+    ctx.beginPath();
+    ctx.moveTo(wx + ww / 2, winY); ctx.lineTo(wx + ww / 2, winY + winH);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(160,195,215,0.2)';
+    ctx.fillRect(wx + 3, winY + 3, ww * 0.44, winH * 0.42);
+
+    // Утопленная лоджия: тёмная ниша, боковая стенка и парапет.
+    const lx = W * 0.5;
+    const lw = W * 0.42;
+    ctx.fillStyle = 'rgba(38,44,50,0.92)';
+    ctx.fillRect(lx, y0 + floorH * 0.1, lw, floorH * 0.78);
+    // Тень в глубине ниши слева.
+    const grad = ctx.createLinearGradient(lx, 0, lx + lw, 0);
+    grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+    grad.addColorStop(0.35, 'rgba(0,0,0,0.12)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(lx, y0 + floorH * 0.1, lw, floorH * 0.78);
+    // Балконная дверь и окно кухни в глубине лоджии.
+    ctx.fillStyle = 'rgba(120,140,150,0.5)';
+    ctx.fillRect(lx + lw * 0.1, winY, lw * 0.3, winH);
+    ctx.fillRect(lx + lw * 0.55, winY + winH * 0.15, lw * 0.32, winH * 0.7);
+    // Парапет лоджии — светлая бетонная плита.
+    ctx.fillStyle = hex(accent);
+    ctx.fillRect(lx - 2, y0 + floorH * 0.56, lw + 4, floorH * 0.24);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(lx - 2, y0 + floorH * 0.78, lw + 4, 4);
+  }
+
+  // Возрастные потёки по швам.
+  for (let i = 0; i < 35; i++) {
+    ctx.fillStyle = `rgba(110,108,98,${0.03 + Math.random() * 0.05})`;
+    ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 8, 10 + Math.random() * 40);
+  }
+
+  noise(ctx, W, H, 18);
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Фасад сталинки: охра, высокие окна, карнизы. */
 export function stalinkaFacade(baseColor = 0xd9b26a) {
   const key = `stalinka-${baseColor}`;

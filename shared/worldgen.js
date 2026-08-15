@@ -33,6 +33,10 @@ const ROOF_TILE_COLORS = [0x5a4038, 0x6b4a3a, 0x4a3630, 0x7a5240];
 // Хрущёвки: силикатный кирпич, выцветшая штукатурка, серая панель.
 const KHRUSHCHEVKA_COLORS = [0xdcd7c2, 0xe0dcc8, 0xc9c4ae, 0xd4c9a8, 0xcfd2cc, 0xe2d9bd];
 
+// Серия 125: светлые панели, парапеты лоджий контрастного тона.
+const S125_COLORS = [0xc6c2b2, 0xd2cec0, 0xb9bfbe, 0xc9c0ad, 0xbcc4c8];
+const S125_ACCENTS = [0x8fa2a8, 0xa8a08c, 0x7f939b, 0xb0a894, 0x94a4a0];
+
 const PANEL_COLORS = [0xc9c3b4, 0xb9bfc0, 0xd3cbb8, 0xa9b2ae, 0xc4b9a6, 0xbfc7cc];
 const STALINKA_COLORS = [0xd9b26a, 0xc98f5f, 0xd8c39a, 0xbf8b62, 0xd6cba8];
 const FACTORY_COLORS = [0x9b8f80, 0x8c9298, 0xa3927f];
@@ -215,7 +219,7 @@ function buildPanelBlock(rng, x0, z0, size, out, props) {
   const gap = size / rows;
   const horizontal = rng() < 0.5; // все дома квартала смотрят в одну сторону
   for (let r = 0; r < rows; r++) {
-    const floors = pick(rng, [5, 5, 9, 9, 12, 16]);
+    const floors = pick(rng, [9, 9, 9, 5, 12, 16]);
     const h = floors * 2.9 + 1.2;
     const long = size - 12 - rng() * 10;
     const thick = floors >= 12 ? 15 : 12;
@@ -230,11 +234,16 @@ function buildPanelBlock(rng, x0, z0, size, out, props) {
         z: z0 + size / 2 + (rng() - 0.5) * 6,
         w: thick, d: long,
       };
+    // Девятиэтажка — это серия 125 с утопленными лоджиями.
+    const isS125 = floors === 9;
     out.push({
-      kind: floors >= 12 ? 'tower' : 'panel',
+      kind: floors >= 12 ? 'tower' : isS125 ? 'series125' : 'panel',
       x: b.x, z: b.z, w: b.w, d: b.d, h,
       floors,
-      color: pick(rng, PANEL_COLORS),
+      color: isS125 ? pick(rng, S125_COLORS) : pick(rng, PANEL_COLORS),
+      accent: isS125 ? pick(rng, S125_ACCENTS) : 0,
+      sections: Math.max(2, Math.round((horizontal ? b.w : b.d) / 14)),
+      horizontal,
       sign: rng() < 0.35 ? pick(rng, SHOP_SIGNS) : '',
       balconies: true,
     });
