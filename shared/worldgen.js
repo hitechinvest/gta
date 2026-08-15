@@ -13,6 +13,8 @@ CONFIG.pitch = CONFIG.block + CONFIG.road;
 CONFIG.total = CONFIG.gridSize * CONFIG.pitch + CONFIG.road;
 CONFIG.origin = -CONFIG.total / 2;
 
+import { LANDMARKS, MONUMENTS } from './landmarks.js';
+
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function rng() {
@@ -163,6 +165,67 @@ function buildFlemishBlock(rng, x0, z0, size, out, props) {
     });
   }
   props.push({ type: 'bench', x: x0 + size / 2, z: z0 + size / 2, rot: rng() * Math.PI, scale: 1 });
+}
+
+/**
+ * Квартал знаковых зданий: три ориентира из общего списка, поставленных
+ * фасадами на разные улицы, и памятник перед ними.
+ */
+function buildLandmarkBlock(rng, x0, z0, size, out, props, cursor) {
+  const slots = [
+    { x: x0 + size * 0.27, z: z0 + 13 },
+    { x: x0 + size * 0.74, z: z0 + 13 },
+    { x: x0 + size * 0.5, z: z0 + size - 14 },
+  ];
+
+  for (const slot of slots) {
+    const spec = LANDMARKS[cursor.landmark % LANDMARKS.length];
+    cursor.landmark += 1;
+    out.push({
+      kind: spec.kind,
+      x: slot.x, z: slot.z,
+      w: Math.min(spec.w, size - 8),
+      d: Math.min(spec.d, 24),
+      h: spec.h,
+      floors: Math.max(2, Math.round(spec.h / 3.4)),
+      color: spec.color,
+      accent: spec.accent || 0,
+      brick: spec.brick !== undefined ? spec.brick : true,
+      sign: spec.sign || '',
+      landmark: spec.name,
+      features: spec.features || {},
+      towers: spec.tower
+        ? [{ dx: spec.tower.dx, dz: spec.tower.dz, r: spec.tower.r, h: spec.tower.h, spire: spec.tower.spire }]
+        : undefined,
+      roofColor: 0x3f4a52,
+      sections: Math.max(2, Math.round(spec.w / 14)),
+    });
+  }
+
+  // Памятник перед центральным зданием квартала.
+  if (cursor.monument < MONUMENTS.length) {
+    const mon = MONUMENTS[cursor.monument];
+    cursor.monument += 1;
+    props.push({
+      type: mon.type, name: mon.name,
+      x: x0 + size * 0.5, z: z0 + size * 0.5,
+      rot: (Math.floor(rng() * 4) * Math.PI) / 2, scale: 1,
+    });
+    props.push({ type: 'bench', x: x0 + size * 0.5 - 7, z: z0 + size * 0.5 + 7, rot: 0, scale: 1 });
+    props.push({ type: 'bench', x: x0 + size * 0.5 + 7, z: z0 + size * 0.5 + 7, rot: 0, scale: 1 });
+    props.push({ type: 'lamp', x: x0 + size * 0.5 - 9, z: z0 + size * 0.5 - 9, rot: 0, scale: 1 });
+    props.push({ type: 'lamp', x: x0 + size * 0.5 + 9, z: z0 + size * 0.5 - 9, rot: Math.PI, scale: 1 });
+  }
+
+  for (let t = 0; t < 6; t++) {
+    const left = t % 2 === 0;
+    props.push({
+      type: rng() < 0.5 ? 'poplar' : 'birch',
+      x: x0 + (left ? 4 + rng() * 7 : size - 11 + rng() * 7),
+      z: z0 + size * 0.32 + rng() * (size * 0.45),
+      rot: rng() * Math.PI * 2, scale: 0.85 + rng() * 0.5,
+    });
+  }
 }
 
 /**
@@ -518,6 +581,11 @@ export function generateWorld(seed = 1337) {
   const districts = [];
 
   const center = Math.floor(gridSize / 2);
+  const cursor = { landmark: 0, monument: 0 };
+  // Кварталы ориентиров: всё первое кольцо и три квартала во втором.
+  const extraLandmarkBlocks = new Set([
+    `${center - 2},${center}`, `${center + 1},${center + 2}`, `${center},${center - 2}`,
+  ]);
 
   for (let i = 0; i < gridSize; i++) {
     for (let j = 0; j < gridSize; j++) {
@@ -528,6 +596,7 @@ export function generateWorld(seed = 1337) {
       if (ring === 0) kind = 'square';
       else if (i === center + 2 && j === center - 1) kind = 'odekolon';
       else if (i === center - 1 && j === center + 1) kind = 'puppetTheatre';
+      else if (ring === 1 || extraLandmarkBlocks.has(`${i},${j}`)) kind = 'landmarks';
       else if (ring === 1) kind = rng() < 0.75 ? 'flemish' : 'stalinka';
       else if (ring === 2) kind = rng() < 0.45 ? 'khrushchevka' : rng() < 0.55 ? 'panel' : rng() < 0.5 ? 'flemish' : 'stalinka';
       else {
@@ -546,6 +615,7 @@ export function generateWorld(seed = 1337) {
         case 'flemish': buildFlemishBlock(rng, x, z, block, buildings, props); break;
         case 'odekolon': buildOdekolon(rng, x, z, block, buildings, props); break;
         case 'puppetTheatre': buildPuppetTheatre(rng, x, z, block, buildings, props); break;
+        case 'landmarks': buildLandmarkBlock(rng, x, z, block, buildings, props, cursor); break;
         case 'khrushchevka': buildKhrushchevkaBlock(rng, x, z, block, buildings, props); break;
         case 'stalinka': buildStalinkaBlock(rng, x, z, block, buildings, props); break;
         case 'panel': buildPanelBlock(rng, x, z, block, buildings, props); break;

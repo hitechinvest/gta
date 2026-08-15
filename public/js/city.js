@@ -128,6 +128,15 @@ function castleTowers(b) {
   const wallMat = new THREE.MeshStandardMaterial({
     map: castleFacade(b.color), roughness: 0.9, metalness: 0.02,
   });
+  const towerMat = (t) => {
+    const m = wallMat.clone();
+    m.map = wallMat.map.clone();
+    m.map.wrapS = THREE.RepeatWrapping;
+    m.map.wrapT = THREE.RepeatWrapping;
+    m.map.repeat.set(Math.max(2, Math.round((2 * Math.PI * t.r) / 5)), Math.max(2, Math.round(t.h / 5)));
+    m.map.needsUpdate = true;
+    return m;
+  };
   const roofMat = new THREE.MeshStandardMaterial({
     color: b.roofColor || 0x2e4a6e, roughness: 0.55, metalness: 0.15,
   });
@@ -136,7 +145,7 @@ function castleTowers(b) {
   });
 
   for (const t of b.towers || []) {
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(t.r, t.r, t.h, 12), wallMat);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(t.r, t.r, t.h, 12), towerMat(t));
     drum.position.set(b.x + t.dx, t.h / 2, b.z + t.dz);
     drum.castShadow = true;
     drum.receiveShadow = true;
@@ -403,9 +412,40 @@ export function buildCity(scene, world, quality = 'high') {
       }
     }
 
-    if (b.kind === 'castle' && b.towers) group.add(castleTowers(b));
-    if (b.kind === 'church') group.add(churchDomes(b.w, b.d, b.h));
-    if (b.kind === 'admin') {
+    const f = b.features || {};
+    if (b.towers) group.add(castleTowers(b));
+    if (b.kind === 'church' || f.domes) {
+      const domes = churchDomes(b.w, b.d, b.h);
+      if (f.domes) domes.position.set(b.x, 0, b.z);
+      group.add(domes);
+    }
+    if (f.spire) {
+      const spireMat = new THREE.MeshStandardMaterial({
+        color: f.spireColor || 0x3f5c4a, roughness: 0.5, metalness: 0.3,
+      });
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(Math.min(b.w, b.d) * 0.42, f.spire, 8), spireMat);
+      cone.position.set(b.x, b.h + f.spire / 2, b.z);
+      cone.castShadow = true;
+      group.add(cone);
+      const pin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.08, f.spire * 0.35, 6),
+        new THREE.MeshStandardMaterial({ color: 0xd8b24a, metalness: 0.7, roughness: 0.35 }),
+      );
+      pin.position.set(b.x, b.h + f.spire + f.spire * 0.16, b.z);
+      group.add(pin);
+    }
+    if (f.crenels) crenellations(b, concreteGeos);
+    if (f.glassRoof) {
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.min(b.w, b.d) * 0.46, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshStandardMaterial({
+          color: 0x9fc4d6, transparent: true, opacity: 0.62, roughness: 0.2, metalness: 0.5,
+        }),
+      );
+      cap.position.set(b.x, b.h, b.z);
+      group.add(cap);
+    }
+    if (b.kind === 'admin' || f.columns) {
       const col = columns(b.w, b.d, b.h);
       col.position.set(b.x, 0, b.z);
       group.add(col);

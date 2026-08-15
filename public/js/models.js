@@ -641,6 +641,104 @@ export function propPrototypes() {
     { geo: box(10, 2, 0.16), mat: mat(0x9a9384), offset: [0, 1, 0] },
     { geo: box(10, 0.14, 0.24), mat: mat(0x7f7a6d), offset: [0, 2.05, 0] },
   ];
+  // --- памятники ------------------------------------------------------------
+  // Инстансер применяет только смещение, поэтому наклон запекаем в геометрию.
+  const rot = (geo, x = 0, z = 0) => {
+    if (x) geo.rotateX(x);
+    if (z) geo.rotateZ(z);
+    return geo;
+  };
+  const flat = (geo, sy) => { geo.scale(1, sy, 1); return geo; };
+  const granite = mat(0x8d8b84);
+  const graniteDark = mat(0x5f5e59);
+  const bronze = mat(0x6e6a52);
+  const steel = mat(0x6b7278);
+  const khaki = mat(0x4f5a3e);
+
+  // Общий постамент, чтобы памятники стояли одинаково уверенно.
+  const pedestal = (w, h, d, y = 0) => [
+    { geo: box(w, h, d), mat: granite, offset: [0, y + h / 2, 0] },
+    { geo: box(w + 0.5, 0.3, d + 0.5), mat: graniteDark, offset: [0, y + 0.15, 0] },
+  ];
+
+  protos.monLenin = [
+    ...pedestal(3.2, 3.4, 3.2),
+    { geo: box(1.0, 2.0, 0.6), mat: bronze, offset: [0, 4.4, 0] }, // пальто
+    { geo: new THREE.SphereGeometry(0.3, 10, 8), mat: bronze, offset: [0, 5.6, 0] },
+    { geo: box(0.24, 1.1, 0.24), mat: bronze, offset: [0.62, 4.9, 0.45] }, // рука вперёд
+    { geo: box(0.22, 0.9, 0.22), mat: bronze, offset: [-0.6, 4.4, -0.1] },
+  ];
+
+  protos.monObelisk = [
+    ...pedestal(4, 1.6, 4),
+    { geo: new THREE.CylinderGeometry(0.45, 1.0, 14, 4), mat: granite, offset: [0, 8.6, 0] },
+    { geo: new THREE.OctahedronGeometry(0.85, 0), mat: mat(0xd8b24a), offset: [0, 16.2, 0] },
+  ];
+
+  protos.monTank = [
+    ...pedestal(6.4, 1.8, 3.6),
+    { geo: box(4.6, 0.9, 2.4), mat: khaki, offset: [0, 2.6, 0] }, // корпус
+    { geo: box(4.8, 0.5, 0.5), mat: graniteDark, offset: [0, 2.2, 1.1] }, // гусеницы
+    { geo: box(4.8, 0.5, 0.5), mat: graniteDark, offset: [0, 2.2, -1.1] },
+    { geo: new THREE.CylinderGeometry(1.0, 1.15, 0.8, 8), mat: khaki, offset: [-0.4, 3.4, 0] },
+    { geo: rot(new THREE.CylinderGeometry(0.13, 0.13, 3.6, 6), 0, Math.PI / 2), mat: khaki, offset: [1.6, 3.5, 0] },
+  ];
+
+  protos.monPlane = [
+    ...pedestal(2.4, 3.2, 2.4),
+    { geo: rot(new THREE.CylinderGeometry(0.5, 0.28, 7.5, 8), 0, Math.PI / 2), mat: steel, offset: [0, 6.4, 0] },
+    { geo: box(1.6, 0.16, 7.2), mat: steel, offset: [0.4, 6.2, 0] }, // крылья
+    { geo: box(1.2, 1.6, 0.14), mat: steel, offset: [-3.0, 7.1, 0] }, // киль
+    { geo: box(0.8, 0.12, 2.4), mat: steel, offset: [-2.9, 6.3, 0] },
+  ];
+
+  protos.monRocket = [
+    ...pedestal(3, 1.2, 3),
+    { geo: new THREE.CylinderGeometry(0.9, 1.1, 11, 10), mat: mat(0xe6e6e2), offset: [0, 7.7, 0] },
+    { geo: new THREE.ConeGeometry(0.9, 3.2, 10), mat: mat(0xc23b2b), offset: [0, 14.8, 0] },
+    { geo: box(0.16, 2.6, 1.7), mat: mat(0xc23b2b), offset: [0, 3.5, 1.2] },
+    { geo: box(1.7, 2.6, 0.16), mat: mat(0xc23b2b), offset: [1.2, 3.5, 0] },
+  ];
+
+  protos.monLoco = [
+    ...pedestal(8, 1.2, 3.4),
+    { geo: rot(new THREE.CylinderGeometry(1.2, 1.2, 5.4, 10), 0, Math.PI / 2), mat: mat(0x2b2b2e), offset: [-0.6, 3.2, 0] },
+    { geo: box(2.2, 2.4, 2.6), mat: mat(0x2b2b2e), offset: [2.6, 3.6, 0] }, // будка
+    { geo: new THREE.CylinderGeometry(0.45, 0.6, 1.6, 8), mat: mat(0x1f1f22), offset: [-2.4, 4.9, 0] }, // труба
+    { geo: rot(new THREE.CylinderGeometry(0.9, 0.9, 0.3, 10), Math.PI / 2), mat: mat(0xa03030), offset: [-1.6, 1.9, 1.4] },
+    { geo: rot(new THREE.CylinderGeometry(0.9, 0.9, 0.3, 10), Math.PI / 2), mat: mat(0xa03030), offset: [1.2, 1.9, 1.4] },
+  ];
+
+  protos.monFlame = [
+    { geo: box(5, 0.35, 5), mat: graniteDark, offset: [0, 0.18, 0] },
+    { geo: flat(new THREE.OctahedronGeometry(1.5, 0), 0.25), mat: mat(0x4a4a48), offset: [0, 0.5, 0] },
+    { geo: new THREE.ConeGeometry(0.5, 1.6, 8), mat: new THREE.MeshBasicMaterial({ color: 0xff9424 }), offset: [0, 1.3, 0] },
+    { geo: new THREE.ConeGeometry(0.26, 0.9, 8), mat: new THREE.MeshBasicMaterial({ color: 0xffe08a }), offset: [0, 1.6, 0] },
+  ];
+
+  protos.monHorseman = [
+    ...pedestal(4.4, 3.0, 2.6),
+    { geo: box(3.0, 1.3, 1.0), mat: bronze, offset: [0, 4.6, 0] }, // круп
+    { geo: box(0.9, 1.4, 0.8), mat: bronze, offset: [1.5, 5.3, 0] }, // шея
+    { geo: box(0.35, 1.9, 0.35), mat: bronze, offset: [1.1, 3.5, 0.4] },
+    { geo: box(0.35, 1.9, 0.35), mat: bronze, offset: [-1.1, 3.5, -0.4] },
+    { geo: box(0.7, 1.3, 0.5), mat: bronze, offset: [0, 5.9, 0] }, // всадник
+    { geo: new THREE.SphereGeometry(0.26, 10, 8), mat: bronze, offset: [0, 6.7, 0] },
+  ];
+
+  protos.monBust = [
+    ...pedestal(1.8, 2.6, 1.8),
+    { geo: box(1.1, 0.7, 0.7), mat: bronze, offset: [0, 3.3, 0] },
+    { geo: new THREE.SphereGeometry(0.34, 12, 10), mat: bronze, offset: [0, 4.0, 0] },
+  ];
+
+  protos.monGlobe = [
+    ...pedestal(3, 1, 3),
+    { geo: new THREE.CylinderGeometry(0.4, 0.7, 9, 8), mat: mat(0xe0dcd2), offset: [0, 5.5, 0] },
+    { geo: new THREE.SphereGeometry(1.5, 14, 10), mat: mat(0x3a6b9a), offset: [0, 11.2, 0] },
+    { geo: rot(new THREE.TorusGeometry(1.75, 0.09, 6, 20), Math.PI / 2), mat: mat(0xd8b24a), offset: [0, 11.2, 0] },
+  ];
+
   // Памятник.
   protos.statue = [
     { geo: box(3.4, 1.1, 3.4), mat: mat(0x8f8f8a), offset: [0, 0.55, 0] },
