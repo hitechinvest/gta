@@ -71,6 +71,45 @@ export function hasWallPhotos() {
   return photos.size > 0;
 }
 
+// --- фотографии конкретных домов --------------------------------------------
+// Снимки настоящих зданий Йошкар-Олы с Викисклада (CC BY-SA 4.0), привязанные
+// к адресам. Дом на Советской, 104 выглядит в игре так же, как в жизни.
+
+let facadePhotos = null;
+
+/** Читает список фотофасадов. Нет файла — просто нет фото, это не ошибка. */
+export async function loadFacadePhotos(base = '/textures/buildings/') {
+  try {
+    const res = await fetch(`${base}manifest.json`, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(String(res.status));
+    const manifest = await res.json();
+    const entries = await Promise.all(Object.entries(manifest).map(([address, rec]) => new Promise((done) => {
+      const img = new Image();
+      img.onload = () => done([address, { ...rec, img }]);
+      img.onerror = () => done(null);
+      img.src = base + rec.file;
+    })));
+    facadePhotos = new Map(entries.filter(Boolean));
+    console.info(`[текстуры] фото настоящих домов: ${facadePhotos.size}`);
+  } catch {
+    facadePhotos = new Map();
+  }
+  return facadePhotos.size;
+}
+
+/** Текстура фасада для дома с таким адресом, если её фотографировали. */
+export function facadePhoto(address) {
+  const rec = address && facadePhotos?.get(address);
+  if (!rec) return null;
+  const key = `facade-${rec.file}`;
+  if (cache.has(key)) return cache.get(key);
+  const c = canvas(rec.img.width, rec.img.height);
+  c.getContext('2d').drawImage(rec.img, 0, 0);
+  const tex = toTexture(c);
+  cache.set(key, tex);
+  return tex;
+}
+
 /**
  * Кладёт фото стены под будущие окна и подмешивает цвет дома: одна и та же
  * съёмка должна давать и охристую сталинку, и серую панель.

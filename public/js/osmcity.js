@@ -6,7 +6,7 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
   flemishFacade, khrushchevkaFacade, series125Facade, asphalt, groundTex,
-  facadeLights, normalFromTexture, labelTexture, signTexture,
+  facadeLights, normalFromTexture, labelTexture, signTexture, facadePhoto,
 } from './textures.js';
 
 // Формы кровли из OSM. rise — доля от меньшей стороны дома: настоящий подъём
@@ -298,10 +298,16 @@ export function buildOsmCity(scene, world, quality = 'high') {
   };
 
   for (const b of world.buildings) {
-    const key = `${b.kind}-${b.color}`;
+    // Дом, который сфотографировали, получает свой материал: одна фотография
+    // на один адрес, делить её с другими домами нельзя.
+    const photo = facadePhoto(b.address);
+    const key = photo ? `photo-${b.address}` : `${b.kind}-${b.color}`;
     if (!byMaterial.has(key)) {
-      const tex = facadeTexture(b).clone();
-      const tile = FACADE_TILE[b.kind] || [6.4, 5.8];
+      const tex = (photo || facadeTexture(b)).clone();
+      // Фотография растягивается на фасад целиком, процедурный тайл — по метрам.
+      const tile = photo
+        ? [Math.max(b.w, b.d), b.h]
+        : (FACADE_TILE[b.kind] || [6.4, 5.8]);
       // Выдавливание нумерует UV в метрах, поэтому масштаб задаём повтором.
       tex.repeat.set(1 / tile[0], 1 / tile[1]);
       tex.needsUpdate = true;
