@@ -10,7 +10,7 @@
 Лицензии: https://creativecommons.org/licenses/by-sa/4.0/deed.ru
 и https://creativecommons.org/licenses/by/4.0/deed.ru
 
-Всего снимков: 26.
+Всего снимков: 27.
 
 | Дом | Файл | Автор | Лицензия | Страница снимка |
 |---|---|---|---|---|
@@ -40,3 +40,4 @@
 | общий фасад (panel) | `view-on-nagorny-microdistrict-from-kirova-street-yoshkar-ola-mari-el-republic-russia.jpg` | Konstantin Pečaļka | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:View_on_Nagorny_microdistrict_from_Kirova_street,_Yoshkar-Ola,_Mari_El_Republic,_Russia.jpg |
 | общий фасад (private) | `огород-под-окнами-дома-panoramio.jpg` | Konstantin Pečaļka | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:%D0%9E%D0%B3%D0%BE%D1%80%D0%BE%D0%B4_%D0%BF%D0%BE%D0%B4_%D0%BE%D0%BA%D0%BD%D0%B0%D0%BC%D0%B8_%D0%B4%D0%BE%D0%BC%D0%B0_-_panoramio.jpg |
 | общий фасад (private) | `огород-под-окнами-дома-panoramio-1.jpg` | Konstantin Pečaļka | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:%D0%9E%D0%B3%D0%BE%D1%80%D0%BE%D0%B4_%D0%BF%D0%BE%D0%B4_%D0%BE%D0%BA%D0%BD%D0%B0%D0%BC%D0%B8_%D0%B4%D0%BE%D0%BC%D0%B0_-_panoramio_(1).jpg |
+| общий фасад (stalinka) | `здание-в-архангельской-слободе-йошкар-ола.jpg` | Bok | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%97%D0%B4%D0%B0%D0%BD%D0%B8%D0%B5_%D0%B2_%D0%90%D1%80%D1%85%D0%B0%D0%BD%D0%B3%D0%B5%D0%BB%D1%8C%D1%81%D0%BA%D0%BE%D0%B9_%D1%81%D0%BB%D0%BE%D0%B1%D0%BE%D0%B4%D0%B5,_%D0%99%D0%BE%D1%88%D0%BA%D0%B0%D1%80-%D0%9E%D0%BB%D0%B0.jpg |
