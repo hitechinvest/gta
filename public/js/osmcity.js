@@ -205,6 +205,67 @@ function polyArea(points) {
   return Math.abs(a / 2);
 }
 
+/**
+ * Фонари по краю проезжей части, через равные промежутки вдоль ломаной
+ * улицы. Ночью они и окна — единственный источник света, без них город
+ * проваливается в чёрное.
+ */
+function placeLamps(group, world) {
+  const drivable = new Set(['residential', 'secondary', 'tertiary', 'primary', 'trunk', 'unclassified', 'living_street']);
+  const STEP = 34; // расстояние между опорами
+  const spots = [];
+
+  for (const road of world.roads || []) {
+    if (!drivable.has(road.k) || !road.p || road.p.length < 2) continue;
+    let carry = 0;
+    let side = 1;
+    for (let i = 1; i < road.p.length; i++) {
+      const [ax, az] = road.p[i - 1];
+      const [bx, bz] = road.p[i];
+      const dx = bx - ax;
+      const dz = bz - az;
+      const len = Math.hypot(dx, dz);
+      if (len < 1) continue;
+      const ux = dx / len;
+      const uz = dz / len;
+      const off = road.w / 2 + 1.2;
+      for (let d = carry; d < len; d += STEP) {
+        const t = d / len;
+        // Фонари идут в шахматном порядке по сторонам улицы.
+        side = -side;
+        spots.push({
+          x: ax + dx * t + uz * off * side,
+          z: az + dz * t - ux * off * side,
+          rot: Math.atan2(ux, uz) + (side > 0 ? Math.PI : 0),
+        });
+      }
+      carry = (carry - len) % STEP + STEP;
+    }
+  }
+
+  const protos = propPrototypes();
+  const dummy = new THREE.Object3D();
+  for (const part of protos.lamp) {
+    const inst = new THREE.InstancedMesh(part.geo, part.mat, spots.length);
+    inst.castShadow = true;
+    inst.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    spots.forEach((p, k) => {
+      dummy.position.set(p.x, 0.1, p.z);
+      dummy.rotation.set(0, p.rot, 0);
+      dummy.scale.setScalar(1);
+      dummy.updateMatrix();
+      const o = new THREE.Vector3(...part.offset);
+      o.applyEuler(dummy.rotation);
+      dummy.position.add(o);
+      dummy.updateMatrix();
+      inst.setMatrixAt(k, dummy.matrix);
+    });
+    inst.instanceMatrix.needsUpdate = true;
+    group.add(inst);
+  }
+  return spots.length;
+}
+
 /** Точка внутри контура — для рассадки деревьев по настоящим границам парка. */
 function pointInPoly(x, z, poly) {
   let inside = false;
@@ -548,6 +609,9 @@ export function buildOsmCity(scene, world, quality = 'high') {
     sprite.userData.building = b;
     labelGroup.add(sprite);
   }
+
+  // --- фонари вдоль проезжих улиц ------------------------------------------
+  const lamps = placeLamps(group, world);
 
   // --- деревья по настоящим зелёным зонам ----------------------------------
   // В данных OSM есть контуры парков, скверов и лесополос; без деревьев они
