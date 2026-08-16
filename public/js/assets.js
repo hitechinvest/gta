@@ -88,18 +88,33 @@ class AssetLibrary {
     });
     root.add(model);
 
+    // Анимации могут лежать отдельным файлом: все персонажи набора сидят на
+    // одном скелете, и держать по копии клипов в каждой модели — впустую
+    // гонять мегабайты.
+    let clips = gltf.animations || [];
+    if (entry.anim) {
+      try {
+        const lib = await this.load(`${this.base}${entry.anim}`);
+        if (lib.animations?.length) clips = lib.animations;
+      } catch (err) {
+        console.warn(`[assets] не загрузились анимации ${entry.anim}:`, err.message || err);
+      }
+    }
+
     let mixer = null;
     const actions = {};
-    if (gltf.animations?.length) {
+    if (clips.length) {
       mixer = new THREE.AnimationMixer(model);
-      const byName = new Map(gltf.animations.map((c) => [c.name, c]));
+      const byName = new Map(clips.map((c) => [c.name, c]));
       const wanted = entry.clips || {};
       for (const [state, clipName] of Object.entries(wanted)) {
-        const clip = byName.get(clipName) || gltf.animations.find((c) => c.name === clipName);
+        // Имя клипа ищем и целиком, и по хвосту: у выгрузок FBX оно обычно
+        // склеено с именем скелета через вертикальную черту.
+        const clip = byName.get(clipName) || clips.find((c) => c.name.endsWith(clipName));
         if (clip) actions[state] = mixer.clipAction(clip);
       }
       // Если клипы не описаны, берём первый — лучше, чем застывшая поза.
-      if (!Object.keys(actions).length) actions.idle = mixer.clipAction(gltf.animations[0]);
+      if (!Object.keys(actions).length) actions.idle = mixer.clipAction(clips[0]);
     }
 
     return { root, model, mixer, actions, entry };

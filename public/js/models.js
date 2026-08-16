@@ -2,7 +2,7 @@
 // уличные объекты. Всё собирается из примитивов, без внешних файлов.
 import * as THREE from 'three';
 import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
-import { VEHICLES, PLAYER } from '/shared/protocol.js';
+import { VEHICLES } from '/shared/protocol.js';
 import { signTexture, foliageTexture, faceTexture, clothTexture, skyCube, blobShadow } from './textures.js';
 import { assets } from './assets.js';
 
@@ -39,20 +39,6 @@ export const SKINS = [
  * Низкополигональный человечек с ручной анимацией ходьбы.
  * Возвращает группу с методом update(dt, state).
  */
-/**
- * Приводит рост готовой модели человека к игровому. Иначе коллизия, камера
- * и прицел считались бы по одному росту, а видели бы мы другой.
- */
-function fitCharacterModel(root) {
-  const box = new THREE.Box3().setFromObject(root);
-  const height = box.max.y - box.min.y;
-  if (height < 0.2) return;
-  root.scale.setScalar(PLAYER.height / height);
-  root.updateMatrixWorld(true);
-  const fitted = new THREE.Box3().setFromObject(root);
-  root.position.y = -fitted.min.y;
-}
-
 export function createCharacter(skinIndex = 0) {
   const s = SKINS[skinIndex % SKINS.length];
   const root = new THREE.Group();
@@ -228,7 +214,8 @@ export function createCharacter(skinIndex = 0) {
     assets.instance('characters', modelId).then((inst) => {
       if (!inst) return;
       hips.visible = false;
-      fitCharacterModel(inst.root);
+      // Рост уже приведён к метрам при конвертации: мерить габарит
+      // скиннед-меша в браузере бесполезно, он считается в позе привязки.
       root.add(inst.root);
       root.userData.gltf = inst;
     });
@@ -423,27 +410,44 @@ function fitVehicleModel(root, def, color) {
 
   const wheels = [];
   root.traverse((o) => {
-    if (!o.name || !o.name.startsWith('wheel')) return;
+    if (!o.name || !/wheel/i.test(o.name)) return;
     const wb = new THREE.Box3().setFromObject(o);
     o.rotation.order = 'YXZ'; // поворот руля вокруг вертикали, вращение — вокруг оси
-    wheels.push({ mesh: o, front: o.name.includes('front'), radius: wb.getSize(new THREE.Vector3()).y / 2 });
-    // Кузов красим в цвет машины, колёса и стёкла оставляем как есть.
+    wheels.push({
+      mesh: o,
+      front: /front/i.test(o.name),
+      radius: wb.getSize(new THREE.Vector3()).y / 2,
+    });
   });
 
   if (color != null) tintBody(root, color);
   return wheels;
 }
 
+// Материалы, которые красить нельзя: стекло, резина, хром, оптика.
+const KEEP_MATERIALS = /window|glass|black|grey|gray|chrome|metal|light|tire|wheel|rim|plate|interior/i;
+
 /**
- * Перекрашивает кузов: у моделей Kenney все детали лежат в одном атласе,
- * поэтому цвет накладывается умножением поверх текстуры только на кузов.
+ * Перекрашивает кузов. У моделей Quaternius материалы названы по смыслу
+ * («Blue» — кузов, «Windows» — стёкла), поэтому цвет машины ставим всем
+ * материалам, кроме заведомо служебных.
  */
 function tintBody(root, color) {
+  const painted = new Map();
   root.traverse((o) => {
-    if (!o.isMesh || !o.name || !o.name.startsWith('body')) return;
-    o.material = o.material.clone();
-    o.material.color = new THREE.Color(color);
-    o.material.needsUpdate = true;
+    if (!o.isMesh || !o.material) return;
+    const list = Array.isArray(o.material) ? o.material : [o.material];
+    const next = list.map((m) => {
+      if (!m || KEEP_MATERIALS.test(m.name || '')) return m;
+      let clone = painted.get(m);
+      if (!clone) {
+        clone = m.clone();
+        clone.color = new THREE.Color(color);
+        painted.set(m, clone);
+      }
+      return clone;
+    });
+    o.material = Array.isArray(o.material) ? next : next[0];
   });
 }
 

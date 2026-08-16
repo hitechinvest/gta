@@ -1,125 +1,121 @@
 {
-  "_comment": "Модели Kenney (CC0): люди — Blocky Characters, машины — Car Kit. См. README.md",
+  "_comment": "Модели Quaternius (CC0): люди — Animated Men/Women, машины — Cars. Клипы вынесены в animations.glb, скелет у всех общий. См. README.md",
   "characters": {
     "ped0": {
-      "url": "people/character-a.glb",
+      "url": "people/Male_Casual.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     },
     "ped1": {
-      "url": "people/character-b.glb",
+      "url": "people/Female_Casual.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     },
     "ped2": {
-      "url": "people/character-c.glb",
+      "url": "people/Male_Shirt.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     },
     "ped3": {
-      "url": "people/character-d.glb",
+      "url": "people/Female_TankTop.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     },
     "ped4": {
-      "url": "people/character-e.glb",
+      "url": "people/Male_LongSleeve.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     },
     "ped5": {
-      "url": "people/character-f.glb",
+      "url": "people/Female_Dress.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     },
     "ped6": {
-      "url": "people/character-g.glb",
+      "url": "people/Male_Suit.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     },
     "ped7": {
-      "url": "people/character-h.glb",
+      "url": "people/Female_Alternative.glb",
+      "anim": "people/animations.glb",
       "clips": {
-        "idle": "idle",
-        "walk": "walk",
-        "run": "sprint",
-        "aim": "holding-right",
-        "die": "die",
-        "sit": "drive"
+        "idle": "Man_Idle",
+        "walk": "Man_Walk",
+        "run": "Man_Run",
+        "aim": "Man_Punch",
+        "die": "Man_Death",
+        "sit": "Man_Sitting"
       }
     }
   },
   "vehicles": {
-    "hatchIm": {
-      "url": "cars/hatchback-sports.glb"
-    },
     "sedanIm": {
-      "url": "cars/sedan.glb"
+      "url": "cars/NormalCar1.glb"
+    },
+    "hatchIm": {
+      "url": "cars/NormalCar2.glb"
     },
     "sportIm": {
-      "url": "cars/sedan-sports.glb"
+      "url": "cars/SportsCar.glb"
     },
     "coupeIm": {
-      "url": "cars/delivery-flat.glb"
+      "url": "cars/SportsCar2.glb"
     },
     "crossIm": {
-      "url": "cars/suv.glb"
-    },
-    "suvIm": {
-      "url": "cars/suv-luxury.glb"
-    },
-    "minivanIm": {
-      "url": "cars/van.glb"
-    },
-    "vanIm": {
-      "url": "cars/delivery.glb"
-    },
-    "truckIm": {
-      "url": "cars/truck.glb"
+      "url": "cars/SUV.glb"
     },
     "taxiIm": {
-      "url": "cars/taxi.glb"
+      "url": "cars/Taxi.glb"
     }
   },
   "props": {}
