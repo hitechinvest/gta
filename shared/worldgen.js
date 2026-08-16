@@ -709,6 +709,50 @@ export function snapToRoad(v) {
 }
 
 /**
+ * Выталкивает окружность из контура здания. Габаритный прямоугольник у
+ * повёрнутого или Г-образного дома захватывает половину улицы, поэтому
+ * реальные контуры OSM обрабатываем по-настоящему, полигоном.
+ */
+function resolvePoly(poly, x, z, radius, out) {
+  let bestD2 = Infinity;
+  let bx = 0;
+  let bz = 0;
+  let inside = false;
+
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i];
+    const [xj, zj] = poly[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+
+    const ex = xj - xi;
+    const ez = zj - zi;
+    const len2 = ex * ex + ez * ez;
+    let t = len2 > 0 ? ((x - xi) * ex + (z - zi) * ez) / len2 : 0;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    const px = xi + ex * t;
+    const pz = zi + ez * t;
+    const d2 = (x - px) * (x - px) + (z - pz) * (z - pz);
+    if (d2 < bestD2) { bestD2 = d2; bx = px; bz = pz; }
+  }
+
+  const d = Math.sqrt(bestD2);
+  if (!inside && d >= radius) return false;
+
+  // Внутри контура выталкиваем наружу через ближайшую стену, снаружи —
+  // отодвигаем от неё на радиус.
+  let nx = inside ? bx - x : x - bx;
+  let nz = inside ? bz - z : z - bz;
+  const len = Math.hypot(nx, nz);
+  if (len < 1e-4) { nx = 1; nz = 0; } else { nx /= len; nz /= len; }
+  out.x = bx + nx * radius;
+  out.z = bz + nz * radius;
+  out.nx = nx;
+  out.nz = nz;
+  out.hit = true;
+  return true;
+}
+
+/**
  * Выталкивает окружность из всех зданий, которые она задевает.
  * Используется и физикой клиента, и ИИ на сервере.
  * Ярусы, поднятые над землёй (y0 > 0), пешеходу не мешают.
@@ -726,20 +770,26 @@ export function resolveCircle(world, x, z, radius, out = { x: 0, z: 0, hit: fals
     const hd = b.d / 2 + radius;
     const dx = out.x - b.x;
     const dz = out.z - b.z;
-    if (Math.abs(dx) < hw && Math.abs(dz) < hd) {
-      const penX = hw - Math.abs(dx);
-      const penZ = hd - Math.abs(dz);
-      if (penX < penZ) {
-        const s = Math.sign(dx) || 1;
-        out.x = b.x + s * hw;
-        out.nx = s;
-      } else {
-        const s = Math.sign(dz) || 1;
-        out.z = b.z + s * hd;
-        out.nz = s;
-      }
-      out.hit = true;
+    if (Math.abs(dx) >= hw || Math.abs(dz) >= hd) continue;
+
+    // Габарит — только грубая отбраковка; точную форму знает контур.
+    if (b.poly && b.poly.length > 2) {
+      resolvePoly(b.poly, out.x, out.z, radius, out);
+      continue;
     }
+
+    const penX = hw - Math.abs(dx);
+    const penZ = hd - Math.abs(dz);
+    if (penX < penZ) {
+      const s = Math.sign(dx) || 1;
+      out.x = b.x + s * hw;
+      out.nx = s;
+    } else {
+      const s = Math.sign(dz) || 1;
+      out.z = b.z + s * hd;
+      out.nz = s;
+    }
+    out.hit = true;
   }
 
   // Границы берём у самого мира: у реального города они шире квартальной сетки.

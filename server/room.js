@@ -8,6 +8,9 @@ import {
   generateWorld, snapToRoad, resolveCircle, raycastBuildings, roadCenter, CONFIG,
 } from '../shared/worldgen.js';
 import { generateOsmWorld } from '../shared/osmworld.js';
+import {
+  buildNet, nearestNode, randomNodeNear, findPath, NET_DRIVE,
+} from '../shared/roadnet.js';
 
 const OSM_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../shared/city-osm.json');
 
@@ -46,6 +49,8 @@ export class Room {
     this.pickups = new Map();
     this.startedAt = now();
     this.lastTick = now();
+    // В реальном городе улицы кривые: патрулям нужен граф, а не сетка кварталов.
+    this.driveNet = this.world.osm ? buildNet(this.world.roads, NET_DRIVE) : null;
 
     this.spawnVehicles();
     this.spawnPickups();
@@ -504,6 +509,15 @@ export class Room {
     const dist = 70 + Math.random() * 40;
     let x = snapToRoad(target.x + Math.cos(angle) * dist);
     let z = snapToRoad(target.z + Math.sin(angle) * dist);
+    if (this.driveNet) {
+      // Экипаж выезжает с настоящей улицы, и обязательно из того же куска
+      // сети, что и цель: иначе доехать до игрока физически невозможно.
+      const near = nearestNode(this.driveNet, target.x, target.z, 300);
+      const comp = near ? near.node.comp : null;
+      const i = randomNodeNear(this.driveNet, target.x, target.z, 60, 160, comp);
+      const node = i >= 0 ? this.driveNet.nodes[i] : near?.node;
+      if (node) { x = node.x; z = node.z; }
+    }
     const id = uid('c');
     const npc = {
       id,
@@ -569,7 +583,49 @@ export class Room {
     }
   }
 
+  /**
+   * Маршрут патруля по настоящим улицам: A* по графу до узла рядом с целью.
+   * Пересчитываем редко — раз в секунду и когда цель заметно сдвинулась,
+   * иначе десять экипажей будут считать путь каждый тик.
+   */
+  copWaypoint(npc, target, dt) {
+    const net = this.driveNet;
+    npc.repath = (npc.repath || 0) - dt;
+    const moved = npc.goal
+      ? Math.hypot(target.x - npc.goal.x, target.z - npc.goal.z)
+      : Infinity;
+
+    if (!npc.path || npc.repath <= 0 || moved > 30) {
+      npc.repath = 1 + Math.random() * 0.4;
+      npc.goal = { x: target.x, z: target.z };
+      const from = nearestNode(net, npc.x, npc.z, 120);
+      const to = nearestNode(net, target.x, target.z, 200);
+      npc.path = from && to ? findPath(net, from.index, to.index) : null;
+      npc.pi = 0;
+      // Первый узел — тот, на котором уже стоим, его пропускаем.
+      if (npc.path && npc.path.length > 1) npc.pi = 1;
+    }
+    if (!npc.path || npc.pi >= npc.path.length) return null;
+
+    let node = net.nodes[npc.path[npc.pi]];
+    while (Math.hypot(node.x - npc.x, node.z - npc.z) < 8 && npc.pi < npc.path.length - 1) {
+      npc.pi += 1;
+      node = net.nodes[npc.path[npc.pi]];
+    }
+
+    // Держимся правой стороны: встречка выглядела бы как езда по газону.
+    const prev = npc.pi > 0 ? net.nodes[npc.path[npc.pi - 1]] : { x: npc.x, z: npc.z };
+    const dx = node.x - prev.x;
+    const dz = node.z - prev.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return { x: node.x + (dz / len) * 1.8, z: node.z - (dx / len) * 1.8 };
+  }
+
   driveCop(npc, target, dt) {
+    if (this.driveNet) {
+      this.driveCopOsm(npc, target, dt);
+      return;
+    }
     // Манхэттенская навигация по сетке улиц.
     const targetXLine = snapToRoad(target.x);
     const targetZLine = snapToRoad(target.z);
@@ -590,6 +646,23 @@ export class Room {
     const dist = Math.hypot(target.x - npc.x, target.z - npc.z);
     if (dist < 26) { wx = target.x; wz = target.z; } // финальный рывок
 
+    this.copSteer(npc, target, wx, wz, dist, dt);
+  }
+
+  /** Патруль по настоящим улицам: едет по маршруту, у цели идёт напролом. */
+  driveCopOsm(npc, target, dt) {
+    const dist = Math.hypot(target.x - npc.x, target.z - npc.z);
+    let wx = target.x;
+    let wz = target.z;
+    if (dist >= 26) {
+      const wp = this.copWaypoint(npc, target, dt);
+      if (wp) { wx = wp.x; wz = wp.z; }
+    }
+    this.copSteer(npc, target, wx, wz, dist, dt);
+  }
+
+  /** Руление к точке, столкновения, таран и огонь — общее для обоих режимов. */
+  copSteer(npc, target, wx, wz, dist, dt) {
     const desiredYaw = Math.atan2(wx - npc.x, wz - npc.z);
     let diff = desiredYaw - npc.yaw;
     while (diff > Math.PI) diff -= Math.PI * 2;
@@ -616,8 +689,14 @@ export class Room {
     }
     if (npc.stuck > 4) {
       // Застрял между домами — вернуть на ближайший перекрёсток.
-      npc.x = snapToRoad(npc.x);
-      npc.z = snapToRoad(npc.z);
+      if (this.driveNet) {
+        const back = nearestNode(this.driveNet, npc.x, npc.z, 200);
+        if (back) { npc.x = back.node.x; npc.z = back.node.z; }
+        npc.path = null;
+      } else {
+        npc.x = snapToRoad(npc.x);
+        npc.z = snapToRoad(npc.z);
+      }
       npc.stuck = 0;
     }
 

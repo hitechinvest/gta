@@ -5,7 +5,10 @@
 
 const CELL = 48; // размер ячейки индекса: примерно длина квартала
 
-const DRIVABLE = ['residential', 'secondary', 'tertiary', 'primary', 'trunk', 'unclassified', 'living_street'];
+// Проезды и дворовые заезды (service) держим в сети ДПС: без них связность
+// центра падает с 92 до 79 процентов и патруль упирается в тупики.
+const DRIVABLE = ['residential', 'secondary', 'tertiary', 'primary', 'trunk',
+  'unclassified', 'living_street', 'service'];
 const WALKABLE = ['footway', 'pedestrian', 'path', 'steps', 'living_street', 'service',
   'residential', 'secondary', 'tertiary', 'primary', 'unclassified'];
 
@@ -63,7 +66,32 @@ export function buildNet(roads, { kinds, foot = false } = NET_DRIVE) {
     }
   }
 
+  markComponents(nodes);
   return { nodes, grid, cell: CELL };
+}
+
+/**
+ * Помечает связные куски сети. Улицы центра распадаются на острова, и без
+ * метки экипаж мог родиться там, откуда до игрока дороги нет вовсе.
+ */
+function markComponents(nodes) {
+  for (const n of nodes) n.comp = -1;
+  let comp = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].comp >= 0 || !nodes[i].links.length) continue;
+    const stack = [i];
+    nodes[i].comp = comp;
+    while (stack.length) {
+      const c = stack.pop();
+      for (const l of nodes[c].links) {
+        if (nodes[l.to].comp < 0) {
+          nodes[l.to].comp = comp;
+          stack.push(l.to);
+        }
+      }
+    }
+    comp += 1;
+  }
 }
 
 /** Ближайший узел графа. Перебираем только соседние ячейки индекса. */
@@ -88,7 +116,7 @@ export function nearestNode(net, x, z, maxDist = 80) {
 }
 
 /** Случайный узел в кольце [minDist, maxDist] вокруг точки. */
-export function randomNodeNear(net, x, z, minDist, maxDist) {
+export function randomNodeNear(net, x, z, minDist, maxDist, comp = null) {
   const rings = Math.max(1, Math.ceil(maxDist / net.cell));
   const gx = Math.floor(x / net.cell);
   const gz = Math.floor(z / net.cell);
@@ -100,6 +128,7 @@ export function randomNodeNear(net, x, z, minDist, maxDist) {
       for (const i of bucket) {
         const n = net.nodes[i];
         if (!n.links.length) continue;
+        if (comp !== null && n.comp !== comp) continue;
         const d = Math.hypot(n.x - x, n.z - z);
         if (d >= minDist && d <= maxDist) found.push(i);
       }
@@ -138,6 +167,8 @@ export function pickNextLink(net, nodeIndex, cameFrom, forwardX = 0, forwardZ = 
 export function findPath(net, start, goal, limit = 4000) {
   if (start === goal) return [start];
   const nodes = net.nodes;
+  // Разные острова сети — искать нечего, и незачем обходить полграфа.
+  if (nodes[start].comp !== nodes[goal].comp) return null;
   const gScore = new Map([[start, 0]]);
   const cameFrom = new Map();
   const open = [{ i: start, f: dist(nodes[start], nodes[goal]) }];
