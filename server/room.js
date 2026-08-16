@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   generateWorld, snapToRoad, resolveCircle, raycastBuildings, roadCenter, CONFIG,
+  isFree, mulberry32,
 } from '../shared/worldgen.js';
 import { generateOsmWorld } from '../shared/osmworld.js';
 import {
@@ -89,6 +90,10 @@ export class Room {
   }
 
   spawnPickups() {
+    if (this.world.osm) {
+      this.spawnPickupsOsm();
+      return;
+    }
     const types = ['health', 'armor', 'ak', 'obrez', 'cash', 'cash', 'health'];
     const g = CONFIG.gridSize;
     let n = 0;
@@ -114,6 +119,54 @@ export class Room {
       const id = uid('p');
       this.pickups.set(id, { id, type: 'ak', x: d.x + 6, z: d.z + 6, takenUntil: 0 });
     }
+  }
+
+  /**
+   * Бонусы в реальном городе: у настоящих подъездов, во дворах и в парках.
+   * Квартальная сетка тут не работает — её просто нет, и по ней аптечки
+   * оказывались посреди чужих домов.
+   */
+  spawnPickupsOsm() {
+    const types = ['health', 'armor', 'ak', 'obrez', 'cash', 'cash', 'health'];
+    const rng = mulberry32(this.seed ^ 0x9e37);
+    const add = (type, x, z) => {
+      const id = uid('p');
+      this.pickups.set(id, { id, type, x, z, takenUntil: 0 });
+    };
+
+    // Возле домов: точка у стены со стороны улицы, как у подъезда.
+    const named = this.world.buildings.filter((b) => b.area > 220);
+    const step = Math.max(1, Math.floor(named.length / 60));
+    let k = 0;
+    for (let i = 0; i < named.length; i += step) {
+      const b = named[i];
+      // Пробуем несколько сторон дома: с одной стороны может быть стена
+      // соседнего корпуса или проезжая часть.
+      for (let tries = 0; tries < 4; tries++) {
+        const angle = rng() * Math.PI * 2;
+        const x = b.x + Math.cos(angle) * (b.w / 2 + 3.5);
+        const z = b.z + Math.sin(angle) * (b.d / 2 + 3.5);
+        if (!isFree(this.world, x, z, 1.2)) continue;
+        // Типы идут по кругу: случайный выбор сваливал половину точек в
+        // один и тот же бронежилет.
+        add(types[k++ % types.length], x, z);
+        break;
+      }
+    }
+
+    // В зелёных зонах — по одной «жирной» точке на парк.
+    for (const area of this.world.green || []) {
+      if (area.k !== 'park' && area.k !== 'forest') continue;
+      let sx = 0;
+      let sz = 0;
+      for (const [x, z] of area.p) { sx += x; sz += z; }
+      const cx = sx / area.p.length;
+      const cz = sz / area.p.length;
+      if (!isFree(this.world, cx, cz, 2)) continue;
+      add(rng() < 0.5 ? 'ak' : 'armor', cx, cz);
+    }
+
+    console.log(`[мир] бонусов расставлено: ${this.pickups.size}`);
   }
 
   randomFootSpawn() {
