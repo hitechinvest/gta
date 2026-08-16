@@ -354,14 +354,21 @@ export function buildOsmCity(scene, world, quality = 'high') {
     // Дом, который сфотографировали, получает свой материал: одна фотография
     // на один адрес, делить её с другими домами нельзя.
     // Сначала снимок этого самого дома, потом общий по типу застройки.
+    // Общие снимки — это малоэтажная застройка центра, поэтому на башню
+    // такой фасад не натягиваем: получилась бы гармошка из пяти крыш.
     const own = facadePhoto(b.address);
-    const photo = own || poolPhoto(b.kind, b.address || `${b.x.toFixed(0)}:${b.z.toFixed(0)}`);
-    const key = own ? `photo-${b.address}` : (photo ? `pool-${b.kind}-${photo.uuid}` : `${b.kind}-${b.color}`);
+    const pooled = !own && b.h <= 14
+      ? poolPhoto(b.kind, b.address || `${b.x.toFixed(0)}:${b.z.toFixed(0)}`)
+      : null;
+    const photo = own || pooled;
+    const key = own ? `photo-${b.address}` : (pooled ? `pool-${pooled.uuid}` : `${b.kind}-${b.color}`);
     if (!byMaterial.has(key)) {
       const tex = (photo || facadeTexture(b)).clone();
       // Фотография растягивается на фасад целиком, процедурный тайл — по метрам.
+      // Снимок конкретного дома растягиваем на весь фасад, общий повторяем
+      // каждые двадцать метров: иначе окна на длинном корпусе размером с ворота.
       const tile = photo
-        ? [Math.max(b.w, b.d), b.h]
+        ? [own ? Math.max(b.w, b.d) : Math.min(26, Math.max(14, b.w)), b.h]
         : (FACADE_TILE[b.kind] || [6.4, 5.8]);
       // Выдавливание нумерует UV в метрах, поэтому масштаб задаём повтором.
       tex.repeat.set(1 / tile[0], 1 / tile[1]);
