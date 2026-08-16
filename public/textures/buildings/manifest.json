@@ -64,5 +64,13 @@
       "name": "Дом Булыгина"
     }
   },
-  "pool": []
+  "pool": [
+    {
+      "file": "building-of-a-city-administration-of-yoshkar-ola.jpg",
+      "author": "Alkort",
+      "license": "CC BY 3.0",
+      "page": "https://commons.wikimedia.org/wiki/File:Building_of_a_city_administration_of_Yoshkar-Ola.jpg",
+      "kind": "stalinka"
+    }
+  ]
 }
