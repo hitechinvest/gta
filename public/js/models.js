@@ -8,6 +8,11 @@ import { assets } from './assets.js';
 
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
+// Скорость, под которую нарисованы клипы ходьбы и бега: по ней подгоняется
+// темп анимации, иначе ступни проскальзывают.
+const WALK_CLIP_SPEED = 1.4;
+const RUN_CLIP_SPEED = 4.6;
+
 /** Контактное пятно под объектом: всегда прижимает его к земле. */
 function contactShadow(width, depth, opacity = 0.5) {
   const mesh = new THREE.Mesh(
@@ -240,6 +245,14 @@ export function createCharacter(skinIndex = 0) {
         next.reset().fadeIn(0.18).play();
         if (d.action) d.action.fadeOut(0.18);
         d.action = next;
+      }
+      // Клип сделан под свою скорость; если крутить его как есть, ноги
+      // скользят по асфальту. Привязываем темп шага к реальной скорости.
+      if (d.action) {
+        const natural = want === 'run' ? RUN_CLIP_SPEED : WALK_CLIP_SPEED;
+        d.action.timeScale = want === 'walk' || want === 'run'
+          ? Math.max(0.5, Math.min(2.4, speed / natural))
+          : 1;
       }
       d.gltf.mixer?.update(dt);
       return;

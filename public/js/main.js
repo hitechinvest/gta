@@ -892,6 +892,7 @@ function update(dt) {
   for (const car of game.traffic.cars) {
     if (Math.abs(car.speed) > 5) game.peds.checkRunOver(car.x, car.z, car.speed, game.effects, false);
   }
+  checkTrafficHitsPlayer(dt, player);
 
   // Прохожие и эффекты.
   game.city.update?.(dt, game.camera);
@@ -975,6 +976,43 @@ function updateDriving(dt) {
   }
 
   if (input.firing && !player.dead && !game.hud.chatOpen) fire();
+}
+
+// Наезд на игрока: трафик и патрули живут на клиенте, поэтому удар замечает
+// он же, а урон считает сервер — иначе машины проезжали бы сквозь пешехода.
+let roadkillCooldown = 0;
+
+function checkTrafficHitsPlayer(dt, player) {
+  roadkillCooldown = Math.max(0, roadkillCooldown - dt);
+  if (player.vehicle || player.dead || roadkillCooldown > 0) return;
+
+  for (const car of [...game.traffic.cars, ...game.cops.values()]) {
+    const speed = Math.abs(car.speed || 0);
+    if (speed < 6) continue;
+    const [w, , l] = car.def.size;
+    // Считаем в системе машины: длинный кузов задевает боком, а не кругом.
+    const dx = player.x - car.x;
+    const dz = player.z - car.z;
+    const cos = Math.cos(-car.yaw);
+    const sin = Math.sin(-car.yaw);
+    const localX = dx * cos - dz * sin;
+    const localZ = dx * sin + dz * cos;
+    if (Math.abs(localX) > w / 2 + 0.45 || Math.abs(localZ) > l / 2 + 0.45) continue;
+
+    roadkillCooldown = 1.2;
+    game.net.send({ t: 'roadkill', s: Math.round(speed) });
+    game.effects.bloodSpray(
+      new THREE.Vector3(player.x, 1.0, player.z),
+      new THREE.Vector3(Math.sin(car.yaw), 0.4, Math.cos(car.yaw)),
+    );
+    game.hud.damageFlash(0.8);
+    sfx.hurt();
+    // Отбрасываем тело от машины: удар должен быть виден, а не только в цифрах.
+    player.x += Math.sin(car.yaw) * 1.6;
+    player.z += Math.cos(car.yaw) * 1.6;
+    game.peds.scare(player.x, player.z, 18);
+    return;
+  }
 }
 
 function updatePickups(dt) {

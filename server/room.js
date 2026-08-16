@@ -217,6 +217,7 @@ export class Room {
       case 'shot': return this.onShot(client, m);
       case 'hit': return this.onHit(client, m);
       case 'crime': return this.onCrime(client, m);
+      case 'roadkill': return this.onRoadkill(client, m);
       case 'pickup': return this.onPickup(client, m);
       case 'chat': return this.onChat(client, m);
       case 'respawn': return this.onRespawn(client);
@@ -433,6 +434,21 @@ export class Room {
     };
     const add = map[m.k];
     if (add) this.addWanted(client, add);
+  }
+
+  /**
+   * Игрока сбила машина городского потока. Поток живёт на клиенте, поэтому
+   * о столкновении сообщает он; сервер ограничивает частоту и урон, чтобы
+   * сообщением нельзя было выбить чужое здоровье.
+   */
+  onRoadkill(client, m) {
+    if (!client.joined || client.vehicle || client.deadUntil > now()) return;
+    const t = now();
+    if (t - (client.lastRoadkill || 0) < 1000) return;
+    client.lastRoadkill = t;
+    const speed = Math.max(0, Math.min(40, Number(m.s) || 0));
+    if (speed < 6) return;
+    this.applyDamage(client, 18 + speed * 1.6, null, 'car');
   }
 
   onVehicleDamage(client, m) {
