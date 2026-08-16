@@ -12,6 +12,7 @@ import { VehicleEntity } from './vehicle.js';
 import { RemotePlayer } from './remote.js';
 import { Peds } from './peds.js';
 import { Traffic } from './traffic.js';
+import { Riders } from './riders.js';
 import { Effects } from './effects.js';
 import { Hud } from './hud.js';
 import { Minimap } from './minimap.js';
@@ -39,6 +40,7 @@ const game = {
   pickups: new Map(),
   effects: null,
   peds: null,
+  riders: null,
   hud: null,
   minimap: null,
   input: null,
@@ -155,6 +157,7 @@ async function start(name, skin) {
   game.effects = new Effects(game.scene);
   game.peds = new Peds(game.scene, game.world);
   game.traffic = new Traffic(game.scene, game.world);
+  game.riders = new Riders(game.scene, game.world);
   game.hud = new Hud();
   game.minimap = new Minimap(document.getElementById('minimap'), game.world);
   game.input = new Input(game.renderer.domElement);
@@ -172,6 +175,10 @@ async function start(name, skin) {
 
   bindNetEvents();
   bindLocalEvents();
+
+  game.riders.onBusted = (r) => {
+    if (r.double) game.hud.toast('ДПС остановила самокатчиков: двое на одном');
+  };
 
   game.peds.onKilled = () => {
     game.net.send({ t: 'crime', k: 'ped' });
@@ -893,8 +900,12 @@ function update(dt) {
     ...game.cops.values(),
   ]);
   for (const car of game.traffic.cars) {
-    if (Math.abs(car.speed) > 5) game.peds.checkRunOver(car.x, car.z, car.speed, game.effects, false);
+    if (Math.abs(car.speed) > 5) {
+      game.peds.checkRunOver(car.x, car.z, car.speed, game.effects, false);
+      game.riders.checkRunOver(car.x, car.z, car.speed, game.effects);
+    }
   }
+  game.riders.update(dt, player.x, player.z, game.effects);
   checkTrafficHitsPlayer(dt, player);
 
   // Прохожие и эффекты.

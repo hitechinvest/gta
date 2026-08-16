@@ -163,6 +163,66 @@ export function pickNextLink(net, nodeIndex, cameFrom, forwardX = 0, forwardZ = 
   return best;
 }
 
+/**
+ * Точка на текущем ребре с боковым смещением (тротуар, полоса).
+ * Состояние: { from, to, link, t, side }. У перекрёстков и тупиков смещение
+ * сходит на нет — тротуары разных улиц сходятся к одной точке, и без этого
+ * персонаж прыгал бы поперёк проезжей части.
+ */
+export function netPoint(net, s, ramp = 6, out = { x: 0, z: 0, yaw: 0 }) {
+  const a = net.nodes[s.from];
+  const b = net.nodes[s.to];
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const fx = dx / len;
+  const fz = dz / len;
+
+  let k = 1;
+  if (a.links.length !== 2) k = Math.min(k, Math.min(1, (s.t * len) / ramp));
+  if (b.links.length !== 2) k = Math.min(k, Math.min(1, ((1 - s.t) * len) / ramp));
+  const off = (s.link?.offset || 0) * (s.side || 0) * k;
+
+  out.x = a.x + dx * s.t + fz * off;
+  out.z = a.z + dz * s.t - fx * off;
+  out.yaw = Math.atan2(fx, fz);
+  return out;
+}
+
+/** Продвижение по сети с переходом на следующее ребро на перекрёстке. */
+export function netAdvance(net, s, dist) {
+  let remaining = dist;
+  for (let guard = 0; guard < 6 && remaining > 0; guard++) {
+    const a = net.nodes[s.from];
+    const b = net.nodes[s.to];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    s.t += remaining / len;
+    if (s.t < 1) return true;
+
+    remaining = (s.t - 1) * len;
+    const next = pickNextLink(net, s.to, s.from, (b.x - a.x) / len, (b.z - a.z) / len);
+    if (!next) { s.t = 1; return false; }
+    s.from = s.to;
+    s.to = next.to;
+    s.link = next;
+    s.t = 0;
+  }
+  return true;
+}
+
+/** Стартовое состояние на случайном ребре рядом с точкой. */
+export function netSpawn(net, x, z, minDist, maxDist) {
+  const from = randomNodeNear(net, x, z, minDist, maxDist);
+  if (from < 0) return null;
+  const node = net.nodes[from];
+  const link = node.links[Math.floor(Math.random() * node.links.length)];
+  if (!link) return null;
+  return {
+    from, to: link.to, link, t: Math.random() * 0.4,
+    side: Math.random() < 0.5 ? 1 : -1,
+  };
+}
+
 /** A* по графу: маршрут узлов от старта к цели. */
 export function findPath(net, start, goal, limit = 4000) {
   if (start === goal) return [start];

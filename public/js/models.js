@@ -337,6 +337,127 @@ function wheelMesh(radius, width) {
   return g;
 }
 
+/**
+ * Электросамокат. Готовых моделей в открытых наборах нет, а форма простая:
+ * дека, руль на стойке и два маленьких колеса. Возвращает группу с
+ * userData.wheels и методом update(dt, state) — как у машин.
+ */
+export function createScooter(color = 0x2b2f36) {
+  const root = new THREE.Group();
+  const frameM = mat(color);
+  const darkM = mat(0x1a1c20);
+
+  const deck = new THREE.Mesh(box(0.16, 0.06, 0.86), frameM);
+  deck.position.set(0, 0.14, 0);
+  deck.castShadow = true;
+  root.add(deck);
+
+  // Стойка руля наклонена вперёд, как у настоящих прокатных самокатов.
+  const stem = new THREE.Mesh(box(0.07, 1.0, 0.07), frameM);
+  stem.position.set(0, 0.62, 0.4);
+  stem.rotation.x = -0.16;
+  stem.castShadow = true;
+  root.add(stem);
+
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.52, 8), darkM);
+  bar.rotation.z = Math.PI / 2;
+  bar.position.set(0, 1.06, 0.32);
+  root.add(bar);
+
+  const deckPlate = new THREE.Mesh(box(0.2, 0.02, 0.6), darkM);
+  deckPlate.position.set(0, 0.18, -0.02);
+  root.add(deckPlate);
+
+  const lamp = new THREE.Mesh(box(0.07, 0.06, 0.04), new THREE.MeshBasicMaterial({ color: 0xfff3d0 }));
+  lamp.position.set(0, 1.0, 0.38);
+  root.add(lamp);
+
+  const wheels = [];
+  for (const [z, front] of [[0.42, true], [-0.42, false]]) {
+    const wheel = wheelMesh(0.12, 0.06);
+    wheel.position.set(0, 0.12, z);
+    root.add(wheel);
+    wheels.push({ mesh: wheel, front });
+  }
+
+  root.add(contactShadow(0.7, 1.3, 0.4));
+  root.userData = { wheels, spin: 0, wheelR: 0.12 };
+  root.update = (dt, state = {}) => {
+    const d = root.userData;
+    d.spin += ((state.speed || 0) / d.wheelR) * dt;
+    for (const w of d.wheels) w.mesh.rotation.x = -d.spin;
+  };
+  return root;
+}
+
+/** Дорожный мотоцикл: рама, бак, седло, вилка и два колеса. */
+export function createMotorcycle(color = 0x8a1f1f) {
+  const root = new THREE.Group();
+  const bodyM = new THREE.MeshStandardMaterial({
+    color, metalness: 0.5, roughness: 0.35, envMap: skyCube(), envMapIntensity: 0.8,
+  });
+  const darkM = mat(0x1a1c20);
+  const chromeM = new THREE.MeshStandardMaterial({ color: 0xc8ced3, metalness: 0.9, roughness: 0.2 });
+
+  const tank = new THREE.Mesh(box(0.26, 0.28, 0.62), bodyM);
+  tank.position.set(0, 0.78, 0.12);
+  tank.castShadow = true;
+  root.add(tank);
+
+  const seat = new THREE.Mesh(box(0.24, 0.12, 0.6), darkM);
+  seat.position.set(0, 0.78, -0.42);
+  seat.castShadow = true;
+  root.add(seat);
+
+  const engine = new THREE.Mesh(box(0.3, 0.3, 0.34), darkM);
+  engine.position.set(0, 0.52, 0.02);
+  root.add(engine);
+
+  const tail = new THREE.Mesh(box(0.2, 0.16, 0.3), bodyM);
+  tail.position.set(0, 0.86, -0.78);
+  root.add(tail);
+
+  // Вилка идёт от руля к переднему колесу, поэтому наклонена.
+  for (const side of [-1, 1]) {
+    const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.86, 8), chromeM);
+    fork.position.set(side * 0.13, 0.68, 0.66);
+    fork.rotation.x = -0.42;
+    root.add(fork);
+  }
+
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.62, 8), darkM);
+  bar.rotation.z = Math.PI / 2;
+  bar.position.set(0, 1.02, 0.78);
+  root.add(bar);
+
+  const headlight = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 12), new THREE.MeshBasicMaterial({ color: 0xfff3d0 }));
+  headlight.rotation.x = Math.PI / 2;
+  headlight.position.set(0, 0.94, 0.9);
+  root.add(headlight);
+
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.7, 8), chromeM);
+  exhaust.rotation.x = Math.PI / 2;
+  exhaust.position.set(0.16, 0.42, -0.45);
+  root.add(exhaust);
+
+  const wheels = [];
+  for (const [z, front] of [[0.86, true], [-0.72, false]]) {
+    const wheel = wheelMesh(front ? 0.32 : 0.34, 0.14);
+    wheel.position.set(0, front ? 0.32 : 0.34, z);
+    root.add(wheel);
+    wheels.push({ mesh: wheel, front });
+  }
+
+  root.add(contactShadow(1.0, 2.4, 0.5));
+  root.userData = { wheels, spin: 0, wheelR: 0.33 };
+  root.update = (dt, state = {}) => {
+    const d = root.userData;
+    d.spin += ((state.speed || 0) / d.wheelR) * dt;
+    for (const w of d.wheels) w.mesh.rotation.x = -d.spin;
+  };
+  return root;
+}
+
 // Боковые профили кузовов: пары (доля длины от -0.5 до 0.5, доля высоты).
 const CAR_PROFILES = {
   sedan: [
