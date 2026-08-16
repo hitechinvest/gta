@@ -71,6 +71,32 @@ export function hasWallPhotos() {
   return photos.size > 0;
 }
 
+/**
+ * Кладёт фото стены под будущие окна и подмешивает цвет дома: одна и та же
+ * съёмка должна давать и охристую сталинку, и серую панель.
+ * tiles — сколько раз фактура повторится по ширине текстуры.
+ */
+function wallPhoto(ctx, W, H, id, color, tiles = 2, tint = 0.5) {
+  const img = photos.get(id);
+  if (!img) return false;
+  const step = W / tiles;
+  for (let x = 0; x < W; x += step) {
+    for (let y = 0; y < H; y += step) ctx.drawImage(img, x, y, step, step);
+  }
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = tint;
+  ctx.fillStyle = hex(color);
+  ctx.fillRect(0, 0, W, H);
+  // Возвращаем яркость: умножение затемняет, и дом уходил бы в грязь.
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = tint * 0.45;
+  ctx.fillStyle = hex(color);
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  return true;
+}
+
 // --- фотографии конкретных домов --------------------------------------------
 // Снимки настоящих зданий Йошкар-Олы с Викисклада (CC BY-SA 4.0), привязанные
 // к адресам. Дом на Советской, 104 выглядит в игре так же, как в жизни.
