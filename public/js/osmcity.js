@@ -6,7 +6,7 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
   flemishFacade, khrushchevkaFacade, series125Facade, asphalt, groundTex,
-  facadeLights, normalFromTexture, labelTexture, signTexture, facadePhoto,
+  facadeLights, normalFromTexture, labelTexture, signTexture, facadePhoto, poolPhoto,
 } from './textures.js';
 import { churchDomes } from './models.js';
 
@@ -353,8 +353,10 @@ export function buildOsmCity(scene, world, quality = 'high') {
   for (const b of world.buildings) {
     // Дом, который сфотографировали, получает свой материал: одна фотография
     // на один адрес, делить её с другими домами нельзя.
-    const photo = facadePhoto(b.address);
-    const key = photo ? `photo-${b.address}` : `${b.kind}-${b.color}`;
+    // Сначала снимок этого самого дома, потом общий по типу застройки.
+    const own = facadePhoto(b.address);
+    const photo = own || poolPhoto(b.kind, b.address || `${b.x.toFixed(0)}:${b.z.toFixed(0)}`);
+    const key = own ? `photo-${b.address}` : (photo ? `pool-${b.kind}-${photo.uuid}` : `${b.kind}-${b.color}`);
     if (!byMaterial.has(key)) {
       const tex = (photo || facadeTexture(b)).clone();
       // Фотография растягивается на фасад целиком, процедурный тайл — по метрам.

@@ -75,32 +75,49 @@ export function hasWallPhotos() {
 // Снимки настоящих зданий Йошкар-Олы с Викисклада (CC BY-SA 4.0), привязанные
 // к адресам. Дом на Советской, 104 выглядит в игре так же, как в жизни.
 
-let facadePhotos = null;
+let facadePhotos = null;   // адрес -> снимок этого самого дома
+let facadePool = [];       // снимки без адреса, раскладываются по типам домов
 
 /** Читает список фотофасадов. Нет файла — просто нет фото, это не ошибка. */
 export async function loadFacadePhotos(base = '/textures/buildings/') {
+  facadePhotos = new Map();
+  facadePool = [];
   try {
     const res = await fetch(`${base}manifest.json`, { cache: 'no-cache' });
     if (!res.ok) throw new Error(String(res.status));
     const manifest = await res.json();
-    const entries = await Promise.all(Object.entries(manifest).map(([address, rec]) => new Promise((done) => {
+    const load = (rec) => new Promise((done) => {
       const img = new Image();
-      img.onload = () => done([address, { ...rec, img }]);
+      img.onload = () => done({ ...rec, img });
       img.onerror = () => done(null);
       img.src = base + rec.file;
-    })));
-    facadePhotos = new Map(entries.filter(Boolean));
-    console.info(`[текстуры] фото настоящих домов: ${facadePhotos.size}`);
+    });
+
+    const byAddress = await Promise.all(
+      Object.entries(manifest.byAddress || {}).map(async ([address, rec]) => [address, await load(rec)]),
+    );
+    for (const [address, rec] of byAddress) if (rec) facadePhotos.set(address, rec);
+
+    const pool = await Promise.all((manifest.pool || []).map(load));
+    facadePool = pool.filter(Boolean);
+    console.info(`[текстуры] фото домов: ${facadePhotos.size} адресных, ${facadePool.length} общих`);
   } catch {
-    facadePhotos = new Map();
+    /* манифеста нет — рисуем фасады процедурно */
   }
-  return facadePhotos.size;
+  return facadePhotos.size + facadePool.length;
 }
 
-/** Текстура фасада для дома с таким адресом, если её фотографировали. */
-export function facadePhoto(address) {
-  const rec = address && facadePhotos?.get(address);
-  if (!rec) return null;
+/** Устойчивый хеш: дом должен получать один и тот же снимок при каждом входе. */
+function hashKey(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function textureFor(rec) {
   const key = `facade-${rec.file}`;
   if (cache.has(key)) return cache.get(key);
   const c = canvas(rec.img.width, rec.img.height);
@@ -110,30 +127,20 @@ export function facadePhoto(address) {
   return tex;
 }
 
+/** Текстура фасада для дома с таким адресом, если его фотографировали. */
+export function facadePhoto(address) {
+  const rec = address && facadePhotos?.get(address);
+  return rec ? textureFor(rec) : null;
+}
+
 /**
- * Кладёт фото стены под будущие окна и подмешивает цвет дома: одна и та же
- * съёмка должна давать и охристую сталинку, и серую панель.
- * tiles — сколько раз фактура повторится по ширине текстуры.
+ * Снимок из общего пула для дома такого типа. Выбор по хешу адреса: у
+ * соседних домов будут разные фасады, но каждый раз одни и те же.
  */
-function wallPhoto(ctx, W, H, id, color, tiles = 2, tint = 0.5) {
-  const img = photos.get(id);
-  if (!img) return false;
-  const step = W / tiles;
-  for (let x = 0; x < W; x += step) {
-    for (let y = 0; y < H; y += step) ctx.drawImage(img, x, y, step, step);
-  }
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = tint;
-  ctx.fillStyle = hex(color);
-  ctx.fillRect(0, 0, W, H);
-  // Возвращаем яркость: умножение затемняет, и дом уходил бы в грязь.
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = tint * 0.45;
-  ctx.fillStyle = hex(color);
-  ctx.fillRect(0, 0, W, H);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
-  return true;
+export function poolPhoto(kind, key) {
+  const fit = facadePool.filter((r) => r.kind === kind);
+  if (!fit.length) return null;
+  return textureFor(fit[hashKey(key || kind) % fit.length]);
 }
 
 /** Фасад панельного дома: швы между плитами, окна, балконы. */
