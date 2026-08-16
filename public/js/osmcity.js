@@ -30,7 +30,7 @@ function facadeTexture(b) {
 }
 
 /** Запекает затенение у земли в цвета вершин. */
-function bakeAO(geo, fade = 4.5, floor = 0.55) {
+function bakeAO(geo, fade = 4.5, floor = 0.68) {
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {
@@ -211,7 +211,7 @@ export function buildOsmCity(scene, world, quality = 'high') {
   if (roofGeos.length) {
     const roofs = new THREE.Mesh(
       mergeGeometries(roofGeos, false),
-      new THREE.MeshLambertMaterial({ color: 0x4a4a48 }),
+      new THREE.MeshLambertMaterial({ color: 0x77746d }),
     );
     roofs.castShadow = true;
     group.add(roofs);
