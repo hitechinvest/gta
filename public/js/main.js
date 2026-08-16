@@ -859,7 +859,7 @@ function update(dt) {
     cop.interpolate(renderTime);
     cop.update(dt, { siren: true, lights: isNight() });
     if (Math.abs(cop.speed) > 6) {
-      game.peds.checkRunOver(cop.x, cop.z, cop.speed, game.effects);
+      game.peds.checkRunOver(cop.x, cop.z, cop.speed, game.effects, false);
     }
   }
 
@@ -890,7 +890,7 @@ function update(dt) {
     ...game.cops.values(),
   ]);
   for (const car of game.traffic.cars) {
-    if (Math.abs(car.speed) > 5) game.peds.checkRunOver(car.x, car.z, car.speed, game.effects);
+    if (Math.abs(car.speed) > 5) game.peds.checkRunOver(car.x, car.z, car.speed, game.effects, false);
   }
 
   // Прохожие и эффекты.
@@ -943,7 +943,7 @@ function updateDriving(dt) {
   if (input.braking && Math.abs(v.speed) > 6 && Math.random() < dt * 20) {
     game.effects.skid(new THREE.Vector3(v.x, 0, v.z), v.yaw);
   }
-  game.peds.checkRunOver(v.x, v.z, v.speed, game.effects);
+  game.peds.checkRunOver(v.x, v.z, v.speed, game.effects, true);
 
   // Игрок «внутри» машины.
   player.x = v.x;

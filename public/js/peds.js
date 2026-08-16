@@ -66,8 +66,11 @@ export class Peds {
     }
   }
 
-  /** Проверка наезда: вызывается для каждой быстрой машины. */
-  checkRunOver(vx, vz, speed, effects) {
+  /**
+   * Проверка наезда. blame — сбил ли именно игрок: трафик и ДПС тоже давят
+   * пешеходов, но розыск за это вешать на игрока нельзя.
+   */
+  checkRunOver(vx, vz, speed, effects, blame = false) {
     if (Math.abs(speed) < 6) return 0;
     let hits = 0;
     for (const p of this.list) {
@@ -80,7 +83,7 @@ export class Peds {
           effects.bloodSpray(new THREE.Vector3(p.x, 0.9, p.z), new THREE.Vector3(0, 1, 0));
         }
         this.scare(p.x, p.z, 26);
-        if (this.onKilled) this.onKilled(p);
+        if (blame && this.onKilled) this.onKilled(p);
       }
     }
     return hits;
