@@ -189,7 +189,7 @@ async function start(name, skin) {
   game.running = true;
   loading.classList.remove('show');
   document.getElementById('hud').classList.add('show');
-  game.hud.chatMessage('', 'Добро пожаловать в Районы. F — сесть в машину, T — чат.', 'system');
+  game.hud.chatMessage('', 'Добро пожаловать в Районы. F — сесть в машину, пробел — ручник, T — чат.', 'system');
   game.input.requestLock();
   renderLoop();
 }
@@ -967,12 +967,15 @@ function updateDriving(dt) {
   player.yaw = v.yaw;
   player.mesh.visible = false;
 
-  // Камера автоматически доворачивается за машиной при движении вперёд.
-  if (Math.abs(v.speed) > 3 && Math.abs(look.dx) < 0.0001) {
+  // Камера сама встаёт за корму. Чем быстрее едем, тем жёстче она держит
+  // курс: на трассе игрок смотрит вперёд, а на парковке может оглядеться.
+  if (Math.abs(v.speed) > 1.2 && Math.abs(look.dx) < 0.0001) {
+    // На заднем ходу камера остаётся за багажником и не разворачивается.
     let diff = v.yaw - player.camYaw;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
-    player.camYaw += diff * Math.min(1, dt * (v.speed > 0 ? 1.6 : 0.6));
+    const rate = v.speed > 0 ? 1.4 + Math.min(2.6, Math.abs(v.speed) * 0.18) : 0.5;
+    player.camYaw += diff * Math.min(1, dt * rate);
   }
 
   player.updateCamera({ camera: game.camera, world: game.world }, dt);

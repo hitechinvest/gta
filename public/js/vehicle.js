@@ -51,28 +51,51 @@ export class VehicleEntity {
     const throttle = controls.throttle;
     const handbrake = controls.handbrake;
 
-    // Продольная динамика.
+    // Продольная динамика. Разгон на низах бодрее, чем на верхах: так машина
+    // отзывается на газ сразу, как в аркадных гонках, а не разгоняется линейно.
     if (throttle > 0) {
       const limit = def.maxSpeed * (this.health <= 0 ? 0 : 1);
-      this.speed += def.accel * throttle * dt * (this.speed < 0 ? 2 : 1);
+      const power = 1.35 - 0.6 * Math.min(1, Math.abs(this.speed) / def.maxSpeed);
+      this.speed += def.accel * throttle * power * dt * (this.speed < 0 ? 2 : 1);
       if (this.speed > limit) this.speed = limit;
     } else if (throttle < 0) {
-      if (this.speed > 0.5) this.speed -= def.brake * dt;
-      else this.speed = Math.max(-def.maxSpeed * 0.4, this.speed + def.accel * throttle * dt * 0.7);
+      if (this.speed > 0.5) {
+        // Тормоз, а не задний ход: пока машина катится вперёд, S тормозит.
+        this.speed -= def.brake * dt;
+        this.reverseHold = 0;
+      } else {
+        // Задний ход включается с паузой, иначе после торможения машина
+        // тут же прыгает назад.
+        this.reverseHold = (this.reverseHold || 0) + dt;
+        if (this.reverseHold > 0.25) {
+          this.speed = Math.max(-def.maxSpeed * 0.42, this.speed + def.accel * throttle * dt * 0.8);
+        } else {
+          this.speed = 0;
+        }
+      }
     } else {
-      // Наката и торможения двигателем.
+      this.reverseHold = 0;
+      // Накат и торможение двигателем.
       const drag = 3.2 + Math.abs(this.speed) * 0.12;
       if (this.speed > 0) this.speed = Math.max(0, this.speed - drag * dt);
       else this.speed = Math.min(0, this.speed + drag * dt);
     }
     if (handbrake) {
-      this.speed *= Math.max(0, 1 - dt * 2.4);
+      // Ручник почти не тормозит на скорости — он срывает зад в занос.
+      this.speed *= Math.max(0, 1 - dt * (Math.abs(this.speed) > 6 ? 1.1 : 4));
     }
     if (this.health <= 0) this.speed *= Math.max(0, 1 - dt * 2);
 
-    // Поворот: чем быстрее, тем меньше угол; на месте не крутимся.
-    const speedFactor = Math.min(1, Math.abs(this.speed) / 7) * (1 - Math.min(0.55, Math.abs(this.speed) / (def.maxSpeed * 2)));
-    this.steerInput += (controls.steer - this.steerInput) * Math.min(1, dt * 9);
+    // Руль. Полный угол доступен уже с трёх метров в секунду: раньше на
+    // скорости пешехода машина почти не поворачивала и парковаться было
+    // невозможно. На высокой скорости угол зажимается, иначе руль ловит юз.
+    const abs = Math.abs(this.speed);
+    const wake = Math.min(1, abs / 3);
+    const tighten = 1 - 0.62 * Math.min(1, abs / def.maxSpeed);
+    const speedFactor = wake * tighten * (handbrake ? 1.35 : 1);
+    // Возврат руля в ноль быстрее, чем поворот: машина сама выравнивается.
+    const toCenter = Math.abs(controls.steer) < Math.abs(this.steerInput);
+    this.steerInput += (controls.steer - this.steerInput) * Math.min(1, dt * (toCenter ? 14 : 8));
     const turn = this.steerInput * def.steer * speedFactor * Math.sign(this.speed || 1);
     this.yaw += turn * dt * 2.4;
 
@@ -81,7 +104,9 @@ export class VehicleEntity {
     const fz = Math.cos(this.yaw);
     const targetVx = fx * this.speed;
     const targetVz = fz * this.speed;
-    const grip = (handbrake ? def.grip * 0.22 : def.grip) * dt;
+    // На ручнике сцепление падает почти до нуля — корма уходит в занос и
+    // машина продолжает скользить по старому вектору скорости.
+    const grip = (handbrake ? def.grip * 0.12 : def.grip) * dt;
     this.vx += (targetVx - this.vx) * Math.min(1, grip);
     this.vz += (targetVz - this.vz) * Math.min(1, grip);
 
