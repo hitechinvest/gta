@@ -25,7 +25,8 @@ export class Minimap {
     this.rotate = true;
 
     // Статическая подложка: рисуем город один раз в offscreen-канвас.
-    const size = CONFIG.total;
+    this.origin = world.osm ? -world.radius : CONFIG.origin;
+    const size = world.osm ? world.radius * 2 : CONFIG.total;
     const px = Math.round(size * this.scale);
     this.base = document.createElement('canvas');
     this.base.width = px;
@@ -35,8 +36,8 @@ export class Minimap {
 
   worldToBase(x, z) {
     return {
-      x: (x - CONFIG.origin) * this.scale,
-      y: (z - CONFIG.origin) * this.scale,
+      x: (x - this.origin) * this.scale,
+      y: (z - this.origin) * this.scale,
     };
   }
 
@@ -45,6 +46,11 @@ export class Minimap {
     const s = this.scale;
     ctx.fillStyle = COLORS.ground;
     ctx.fillRect(0, 0, this.base.width, this.base.height);
+
+    if (this.world.osm) {
+      this.drawOsmBase(ctx, s);
+      return;
+    }
 
     // Кварталы.
     ctx.fillStyle = COLORS.block;
@@ -72,6 +78,49 @@ export class Minimap {
     for (const b of this.world.buildings) {
       const p = this.worldToBase(b.x - b.w / 2, b.z - b.d / 2);
       ctx.fillRect(p.x, p.y, Math.max(1, b.w * s), Math.max(1, b.d * s));
+    }
+  }
+
+  /** Реальный город: зелень, улицы лентами, контуры домов. */
+  drawOsmBase(ctx, s) {
+    for (const area of this.world.green || []) {
+      if (!area.p || area.p.length < 3) continue;
+      ctx.fillStyle = '#33422c';
+      ctx.beginPath();
+      area.p.forEach(([x, z], i) => {
+        const q = this.worldToBase(x, z);
+        if (i === 0) ctx.moveTo(q.x, q.y);
+        else ctx.lineTo(q.x, q.y);
+      });
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const road of this.world.roads || []) {
+      const walk = road.k === 'footway' || road.k === 'pedestrian';
+      ctx.strokeStyle = walk ? '#5a5a54' : COLORS.road;
+      ctx.lineWidth = Math.max(1, road.w * s * (walk ? 0.5 : 1));
+      ctx.beginPath();
+      road.p.forEach(([x, z], i) => {
+        const q = this.worldToBase(x, z);
+        if (i === 0) ctx.moveTo(q.x, q.y);
+        else ctx.lineTo(q.x, q.y);
+      });
+      ctx.stroke();
+    }
+
+    for (const b of this.world.buildings) {
+      ctx.fillStyle = b.name ? '#9a8f70' : COLORS.building;
+      ctx.beginPath();
+      (b.poly || []).forEach(([x, z], i) => {
+        const q = this.worldToBase(x, z);
+        if (i === 0) ctx.moveTo(q.x, q.y);
+        else ctx.lineTo(q.x, q.y);
+      });
+      ctx.closePath();
+      ctx.fill();
     }
   }
 

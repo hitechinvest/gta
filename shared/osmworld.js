@@ -149,6 +149,33 @@ export function generateOsmWorld(data) {
   return cached;
 }
 
+/**
+ * Ближайшая точка уличной сети: возвращает саму точку, направление
+ * сегмента и название улицы. Нужна и подписи в HUD, и навигации.
+ */
+export function nearestRoad(world, x, z, maxDist = 60) {
+  let best = null;
+  for (const road of world.roads || []) {
+    for (let i = 1; i < road.p.length; i++) {
+      const [ax, az] = road.p[i - 1];
+      const [bx, bz] = road.p[i];
+      const dx = bx - ax;
+      const dz = bz - az;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1) continue;
+      let t = ((x - ax) * dx + (z - az) * dz) / len2;
+      t = Math.max(0, Math.min(1, t));
+      const px = ax + dx * t;
+      const pz = az + dz * t;
+      const dist = Math.hypot(x - px, z - pz);
+      if (!best || dist < best.dist) {
+        best = { x: px, z: pz, dist, yaw: Math.atan2(dx, dz), name: road.n, kind: road.k, width: road.w };
+      }
+    }
+  }
+  return best && best.dist <= maxDist ? best : null;
+}
+
 /** Свободно ли место — используется при отборе точек спавна. */
 export function isFree(world, x, z, r) {
   for (const b of world.buildings) {

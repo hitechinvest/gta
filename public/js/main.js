@@ -6,7 +6,7 @@ import {
 import { WEAPONS, NET, PICKUP_TYPES } from '/shared/protocol.js';
 import { buildCity } from './city.js';
 import { buildOsmCity } from './osmcity.js';
-import { generateOsmWorld } from '/shared/osmworld.js';
+import { generateOsmWorld, nearestRoad } from '/shared/osmworld.js';
 import { LocalPlayer } from './player.js';
 import { VehicleEntity } from './vehicle.js';
 import { RemotePlayer } from './remote.js';
@@ -1048,7 +1048,21 @@ function updateHud(dt) {
     hud.hint('');
   }
 
-  // Название улицы под игроком.
+  // Название улицы под игроком: в реальном городе — из данных OSM.
+  if (game.world.osm) {
+    game.streetTick = (game.streetTick || 0) - dt;
+    if (game.streetTick <= 0) {
+      game.streetTick = 0.7;
+      const road = nearestRoad(game.world, p.x, p.z, 45);
+      game.streetName = road?.name || 'вне улиц';
+    }
+    hud.setStreet(game.streetName || '');
+    game.fps += (1 / Math.max(dt, 0.0001) - game.fps) * 0.05;
+    hud.setStats(`${Math.round(game.fps)} FPS · ${game.net.ping} мс · игроков: ${game.remotes.size + 1} · ДПС: ${game.cops.size}`);
+    updateHudRest(p, hud, dt);
+    return;
+  }
+
   const streetIndexX = Math.round((p.x - CONFIG.origin - CONFIG.road / 2) / CONFIG.pitch);
   const streetIndexZ = Math.round((p.z - CONFIG.origin - CONFIG.road / 2) / CONFIG.pitch);
   const onX = Math.abs(p.x - snapToRoad(p.x)) < Math.abs(p.z - snapToRoad(p.z));
@@ -1060,6 +1074,11 @@ function updateHud(dt) {
   game.fps += (1 / Math.max(dt, 0.0001) - game.fps) * 0.05;
   hud.setStats(`${Math.round(game.fps)} FPS · ${game.net.ping} мс · игроков: ${game.remotes.size + 1} · ДПС: ${game.cops.size}`);
 
+  updateHudRest(p, hud, dt);
+}
+
+/** Хвост HUD: таблица игроков и миникарта — общие для обоих миров. */
+function updateHudRest(p, hud, dt) {
   // Таблица игроков — пересобираем только когда она открыта.
   if (hud.scoreVisible) {
     const rows = [{
