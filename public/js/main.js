@@ -567,6 +567,9 @@ function bindLocalEvents() {
       case 'Digit4': game.player.selectWeapon('obrez'); break;
       case 'KeyT':
       case 'Enter':
+        // Гасим само нажатие: поле ввода получает фокус в этом же событии,
+        // и без этого буква «t» вписывалась в начало сообщения.
+        e.preventDefault();
         openChat();
         break;
       case 'KeyM':
