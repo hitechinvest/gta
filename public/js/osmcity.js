@@ -8,7 +8,7 @@ import {
   flemishFacade, khrushchevkaFacade, series125Facade, asphalt, groundTex,
   facadeLights, normalFromTexture, labelTexture, signTexture, facadePhoto, poolPhoto,
 } from './textures.js';
-import { churchDomes } from './models.js';
+import { churchDomes, propPrototypes } from './models.js';
 
 // Формы кровли из OSM. rise — доля от меньшей стороны дома: настоящий подъём
 // в данных почти не проставлен, а по пропорции он выходит правдоподобным.
@@ -203,6 +203,89 @@ function polyArea(points) {
     a += (points[j][0] + points[i][0]) * (points[j][1] - points[i][1]);
   }
   return Math.abs(a / 2);
+}
+
+/** Точка внутри контура — для рассадки деревьев по настоящим границам парка. */
+function pointInPoly(x, z, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i];
+    const [xj, zj] = poly[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Сколько деревьев на гектар в разных зонах: в лесополосе гуще, на газоне
+// и спортплощадке — редкие одиночные.
+const GREEN_DENSITY = {
+  forest: 90, park: 45, grass: 10, cemetery: 25, industrial: 4,
+  playground: 6, pitch: 0,
+};
+
+/**
+ * Рассаживает деревья по зелёным контурам OSM. Точки набрасываются в
+ * габарит контура и отсеиваются проверкой на попадание внутрь: у парков
+ * форма сложная, а по габариту деревья вставали бы на проезжей части.
+ */
+function plantGreenery(group, world, rich) {
+  const protos = propPrototypes();
+  const kinds = rich ? ['poplar', 'birch'] : ['birch'];
+  const spots = { poplar: [], birch: [] };
+  let seed = 1;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+
+  for (const area of world.green || []) {
+    if (!area.p || area.p.length < 3) continue;
+    const density = GREEN_DENSITY[area.k] ?? 20;
+    if (!density) continue;
+
+    let minX = Infinity; let maxX = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
+    for (const [x, z] of area.p) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+    const boxArea = (maxX - minX) * (maxZ - minZ);
+    if (boxArea < 40) continue;
+    const tries = Math.min(400, Math.round((boxArea / 10000) * density));
+
+    for (let i = 0; i < tries; i++) {
+      const x = minX + rnd() * (maxX - minX);
+      const z = minZ + rnd() * (maxZ - minZ);
+      if (!pointInPoly(x, z, area.p)) continue;
+      const kind = kinds[Math.floor(rnd() * kinds.length)];
+      spots[kind].push({ x, z, rot: rnd() * Math.PI * 2, scale: 0.8 + rnd() * 0.5 });
+    }
+  }
+
+  const dummy = new THREE.Object3D();
+  for (const [kind, list] of Object.entries(spots)) {
+    if (!list.length || !protos[kind]) continue;
+    for (const part of protos[kind]) {
+      const inst = new THREE.InstancedMesh(part.geo, part.mat, list.length);
+      inst.castShadow = true;
+      inst.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      list.forEach((p, k) => {
+        dummy.position.set(p.x, 0.1, p.z);
+        dummy.rotation.set(0, p.rot, 0);
+        dummy.scale.setScalar(p.scale);
+        dummy.updateMatrix();
+        const off = new THREE.Vector3(...part.offset).multiplyScalar(p.scale);
+        off.applyEuler(dummy.rotation);
+        dummy.position.add(off);
+        dummy.updateMatrix();
+        inst.setMatrixAt(k, dummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      group.add(inst);
+    }
+  }
+  return spots.poplar.length + spots.birch.length;
 }
 
 /**
@@ -465,6 +548,11 @@ export function buildOsmCity(scene, world, quality = 'high') {
     sprite.userData.building = b;
     labelGroup.add(sprite);
   }
+
+  // --- деревья по настоящим зелёным зонам ----------------------------------
+  // В данных OSM есть контуры парков, скверов и лесополос; без деревьев они
+  // остаются зелёными пятнами на асфальте.
+  plantGreenery(group, world, rich);
 
   // --- храмы и заправки ----------------------------------------------------
   // По контуру из OSM церковь неотличима от склада, а заправка — от сарая.
