@@ -6,8 +6,21 @@ import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
   flemishFacade, khrushchevkaFacade, series125Facade, asphalt, groundTex,
-  facadeLights, normalFromTexture, labelTexture,
+  facadeLights, normalFromTexture, labelTexture, signTexture,
 } from './textures.js';
+
+// Формы кровли из OSM. rise — доля от меньшей стороны дома: настоящий подъём
+// в данных почти не проставлен, а по пропорции он выходит правдоподобным.
+const ROOF_SHAPES = {
+  gabled: { rise: 0.42 },
+  hipped: { rise: 0.36 },
+  pyramidal: { rise: 0.55 },
+  mansard: { rise: 0.3 },
+  gambrel: { rise: 0.4 },
+  saltbox: { rise: 0.4 },
+  dome: { rise: 0.6 },
+};
+const DEFAULT_ROOF_COLOR = 0x8a4a3a; // некрашеная кровля центра — рыжий шифер
 
 const FACADE_TILE = {
   panel: [6.4, 5.8], tower: [6.4, 5.8], stalinka: [7.2, 7.2], factory: [12, 9],
@@ -61,6 +74,134 @@ function roadRibbon(points, width) {
     geos.push(g);
   }
   return geos;
+}
+
+/**
+ * Минимальный по площади охватывающий прямоугольник контура: через него
+ * строятся скатные крыши. Перебираем направления рёбер — для домов, где все
+ * углы прямые, этого достаточно и работает мгновенно.
+ */
+function orientedBox(points) {
+  let best = null;
+  for (let i = 0; i < points.length; i++) {
+    const [ax, az] = points[i];
+    const [bx, bz] = points[(i + 1) % points.length];
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 0.5) continue;
+    const ux = (bx - ax) / len;
+    const uz = (bz - az) / len;
+    let minU = Infinity; let maxU = -Infinity; let minV = Infinity; let maxV = -Infinity;
+    for (const [x, z] of points) {
+      const u = x * ux + z * uz;
+      const v = -x * uz + z * ux;
+      if (u < minU) minU = u;
+      if (u > maxU) maxU = u;
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    const area = (maxU - minU) * (maxV - minV);
+    if (!best || area < best.area) {
+      best = {
+        area, ux, uz, minU, maxU, minV, maxV,
+        // Центр — обратно в мировые координаты.
+        cx: ((minU + maxU) / 2) * ux - ((minV + maxV) / 2) * uz,
+        cz: ((minU + maxU) / 2) * uz + ((minV + maxV) / 2) * ux,
+        len: maxU - minU,
+        width: maxV - minV,
+        angle: Math.atan2(ux, uz),
+      };
+    }
+  }
+  return best;
+}
+
+/** Треугольник в геометрию: крыши строим вручную, форма у каждой своя. */
+function tri(out, a, b, c) {
+  out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+}
+
+function geoFromTris(verts) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(verts);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  // Набор атрибутов должен совпадать с плитой кровли: mergeGeometries
+  // отказывается сливать геометрии с разным составом.
+  const count = pos.length / 3;
+  const uv = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    uv[i * 2] = pos[i * 3] * 0.25;
+    uv[i * 2 + 1] = pos[i * 3 + 2] * 0.25;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Скатная крыша по форме из OSM. Двускатную и вальмовую строим над
+ * охватывающим прямоугольником — почти вся застройка центра прямоугольная;
+ * если контур сложный, прямоугольник врал бы, и мы оставляем плоскую плиту.
+ */
+function pitchedRoof(poly, shape, baseY, height) {
+  const ob = orientedBox(poly);
+  if (!ob) return null;
+  const fill = polyArea(poly) / (ob.area || 1);
+
+  const verts = [];
+  const { cx, cz } = ob;
+  let { ux, uz, len, width } = ob;
+  // Конёк идёт вдоль длинной стороны дома. Без этого над вытянутым корпусом
+  // вырастал бы поперечный шатёр в высоту этажа.
+  if (width > len) {
+    [ux, uz] = [-uz, ux];
+    [len, width] = [width, len];
+  }
+  // Оси прямоугольника: вдоль конька и поперёк.
+  const vx = -uz;
+  const vz = ux;
+  const hl = len / 2;
+  const hw = width / 2;
+  const pt = (u, v, y) => [cx + ux * u + vx * v, baseY + y, cz + uz * u + vz * v];
+
+  if (shape === 'pyramidal' || shape === 'dome' || fill < 0.82) {
+    // Шатёр строится прямо по контуру, поэтому годится для любой формы.
+    const apex = [0, 0];
+    for (const [x, z] of poly) { apex[0] += x; apex[1] += z; }
+    apex[0] /= poly.length;
+    apex[1] /= poly.length;
+    const top = [apex[0], baseY + height, apex[1]];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      tri(verts, [a[0], baseY, a[1]], [b[0], baseY, b[1]], top);
+    }
+    return geoFromTris(verts);
+  }
+
+  // Вальмовая крыша: конёк короче основания на вынос скатов с торцов.
+  const hipInset = shape === 'hipped' || shape === 'mansard' ? Math.min(hw, hl * 0.5) : 0;
+  const ridgeA = pt(-hl + hipInset, 0, height);
+  const ridgeB = pt(hl - hipInset, 0, height);
+  const c1 = pt(-hl, -hw, 0);
+  const c2 = pt(hl, -hw, 0);
+  const c3 = pt(hl, hw, 0);
+  const c4 = pt(-hl, hw, 0);
+
+  // Два ската.
+  tri(verts, c1, c2, ridgeB); tri(verts, c1, ridgeB, ridgeA);
+  tri(verts, c3, c4, ridgeA); tri(verts, c3, ridgeA, ridgeB);
+  // Торцы: у вальмовой — тоже скаты, у двускатной — вертикальные фронтоны.
+  tri(verts, c2, c3, ridgeB);
+  tri(verts, c4, c1, ridgeA);
+  return geoFromTris(verts);
+}
+
+function polyArea(points) {
+  let a = 0;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    a += (points[j][0] + points[i][0]) * (points[j][1] - points[i][1]);
+  }
+  return Math.abs(a / 2);
 }
 
 /** Плоский полигон (газон, вода, площадь) из контура. */
@@ -146,7 +287,15 @@ export function buildOsmCity(scene, world, quality = 'high') {
 
   // --- дома по реальным контурам -------------------------------------------
   const byMaterial = new Map();
-  const roofGeos = [];
+  // Кровли группируем по цвету: в OSM он проставлен у полутора сотен домов,
+  // и общая серая плита на всех сразу выдавала бы условность.
+  const roofsByColor = new Map();
+  const pushRoof = (geo, color) => {
+    const key = color || 0;
+    let bucket = roofsByColor.get(key);
+    if (!bucket) roofsByColor.set(key, bucket = []);
+    bucket.push(geo);
+  };
 
   for (const b of world.buildings) {
     const key = `${b.kind}-${b.color}`;
@@ -194,7 +343,17 @@ export function buildOsmCity(scene, world, quality = 'high') {
       const roofGeo = new THREE.ExtrudeGeometry(roof, { depth: 0.35, bevelEnabled: false, curveSegments: 1 });
       roofGeo.rotateX(-Math.PI / 2);
       roofGeo.translate(0, b.h + 0.35, 0);
-      roofGeos.push(roofGeo);
+      pushRoof(roofGeo, b.roofColor);
+
+      // Скатная кровля поверх плиты, если форма известна из OSM.
+      const roofShape = ROOF_SHAPES[b.roof];
+      if (roofShape) {
+        const rise = b.roofLevels
+          ? b.roofLevels * 2.6
+          : Math.min(6.5, Math.max(1.8, Math.min(b.w, b.d) * roofShape.rise));
+        const pitched = pitchedRoof(b.poly, b.roof, b.h + 0.35, rise);
+        if (pitched) pushRoof(pitched, b.roofColor || DEFAULT_ROOF_COLOR);
+      }
     } catch {
       // Кривой контур из OSM — пропускаем дом, чтобы не ронять сборку.
     }
@@ -208,14 +367,15 @@ export function buildOsmCity(scene, world, quality = 'high') {
     group.add(mesh);
     geos.forEach((g) => g.dispose());
   }
-  if (roofGeos.length) {
+  for (const [color, geos] of roofsByColor) {
+    if (!geos.length) continue;
     const roofs = new THREE.Mesh(
-      mergeGeometries(roofGeos, false),
-      new THREE.MeshLambertMaterial({ color: 0x77746d }),
+      mergeGeometries(geos, false),
+      new THREE.MeshLambertMaterial({ color: color || 0x77746d }),
     );
     roofs.castShadow = true;
     group.add(roofs);
-    roofGeos.forEach((g) => g.dispose());
+    geos.forEach((g) => g.dispose());
   }
 
   // --- таблички с названиями и адресами ------------------------------------
@@ -236,6 +396,25 @@ export function buildOsmCity(scene, world, quality = 'high') {
     sprite.scale.set(22, 5.5, 1);
     sprite.userData.building = b;
     labelGroup.add(sprite);
+  }
+
+  // Крышная вывеска на самом высоком доме в центре: заметный ориентир,
+  // по которому игрок понимает, где находится, ещё издалека.
+  const tall = world.buildings
+    .filter((b) => Math.hypot(b.x, b.z) < 500 && b.area > 300)
+    .sort((a, b) => b.h - a.h)[0];
+  if (tall) {
+    const width = Math.min(26, Math.max(12, Math.min(tall.w, tall.d) * 0.9));
+    const signGeo = new THREE.PlaneGeometry(width, width / 4);
+    const signMat = new THREE.MeshBasicMaterial({
+      map: signTexture('Yandex.ru', '#ffdb4d'), toneMapped: false, side: THREE.DoubleSide,
+    });
+    const sign = new THREE.Mesh(signGeo, signMat);
+    sign.position.set(tall.x, tall.h + width / 8 + 0.6, tall.z);
+    group.add(sign);
+    const across = sign.clone();
+    across.rotation.y = Math.PI / 2;
+    group.add(across);
   }
 
   const POOL = 14;

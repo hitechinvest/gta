@@ -113,11 +113,33 @@ function buildingKind(tags, height) {
   if (b === 'industrial' || b === 'warehouse' || b === 'factory' || tags.landuse === 'industrial') return 'factory';
   if (b === 'house' || b === 'detached' || b === 'hut' || b === 'bungalow') return 'private';
   if (b === 'kiosk' || b === 'retail' || b === 'commercial' || b === 'office') return 'stalinka';
+  // Соцкультбыт: школы и детсады строили по типовым сериям, панель им ближе
+  // сталинского фасада, даром что этажей мало.
+  if (b === 'school' || b === 'kindergarten' || b === 'hospital' || b === 'university') return 'panel';
+  if (b === 'dormitory' && height < 20) return 'khrushchevka';
   if (height >= 30) return 'tower';
   if (height >= 22) return 'series125';
   if (height <= 16 && height >= 12) return 'khrushchevka';
   if (height < 12) return 'stalinka';
   return 'panel';
+}
+
+// Цвет в OSM пишут и как #rrggbb, и словом. Разбираем оба, иначе теряем
+// половину проставленных кровель.
+const NAMED_COLORS = {
+  red: 0xa03a2c, darkred: 0x7a2a20, brown: 0x7a5230, maroon: 0x6a2a24,
+  green: 0x3d6b3a, darkgreen: 0x2c4f2b, blue: 0x2f5c8a, darkblue: 0x27436b,
+  grey: 0x8a8a8a, gray: 0x8a8a8a, silver: 0xb0b4b8, black: 0x2a2c30,
+  white: 0xdedede, yellow: 0xc9a63a, orange: 0xc07a3a, beige: 0xd8cba8,
+  copper: 0x8a5a3a, terracotta: 0xa85a3a,
+};
+
+function colorTag(value) {
+  if (!value) return 0;
+  const v = String(value).trim().toLowerCase();
+  const hex = v.match(/^#?([0-9a-f]{6})$/);
+  if (hex) return parseInt(hex[1], 16);
+  return NAMED_COLORS[v] || 0;
 }
 
 const ROAD_WIDTH = {
@@ -167,6 +189,14 @@ for (const el of data.elements) {
       hn: tags['addr:housenumber'] || '',
       am: tags.amenity || tags.shop || tags.office || tags.tourism || '',
       l: parseInt(tags['building:levels'], 10) || 0,
+      // Крыша и материал: в центре они проставлены у сотен домов, и именно
+      // они отличают вальмовую кровлю сталинки от плоской панельки.
+      rs: tags['roof:shape'] || '',
+      rl: parseFloat(tags['roof:levels']) || 0,
+      rc: colorTag(tags['roof:colour']),
+      bc: colorTag(tags['building:colour']),
+      bm: tags['building:material'] || '',
+      bt: tags.building,
     });
   } else if (tags.highway) {
     roads.push({

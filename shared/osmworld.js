@@ -82,7 +82,8 @@ export function generateOsmWorld(data) {
     const kind = KIND_COLORS[b.k] ? b.k : 'panel';
     const palette = KIND_COLORS[kind];
     const key = `${b.n}${b.st}${b.hn}${box.minX.toFixed(1)}${box.minZ.toFixed(1)}`;
-    const color = palette[Math.floor(hash(key) * palette.length) % palette.length];
+    // Если цвет стен указан в OSM — он честнее любой нашей палитры.
+    const color = b.bc || palette[Math.floor(hash(key) * palette.length) % palette.length];
 
     const address = b.hn ? `${b.st ? `${b.st}, ` : ''}${b.hn}` : '';
     buildings.push({
@@ -99,6 +100,13 @@ export function generateOsmWorld(data) {
       name: b.n || '',
       address,
       amenity: b.am || '',
+      // Форма и цвет кровли из OSM: у 145 домов центра они проставлены,
+      // и именно они отличают вальмовую крышу от плоской панельной.
+      roof: b.rs || '',
+      roofLevels: b.rl || 0,
+      roofColor: b.rc || 0,
+      wallColor: b.bc || 0,
+      material: b.bm || '',
       // Подпись показываем только у заметных или названных домов.
       label: b.n || address,
       sign: '',
