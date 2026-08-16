@@ -51,6 +51,7 @@ const QUERY = `
   way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street|service|pedestrian|footway)$"](${BBOX});
   way["natural"="water"](${BBOX});
   way["waterway"="riverbank"](${BBOX});
+  relation["natural"="water"]["type"="multipolygon"](${BBOX});
   way["leisure"~"^(park|garden|pitch|playground)$"](${BBOX});
   way["landuse"~"^(grass|forest|cemetery|industrial)$"](${BBOX});
 );
@@ -89,6 +90,67 @@ const toLocal = (lat, lon) => [
   +((lon - CENTER.lon) * mPerDegLon).toFixed(2), // x — на восток
   +((CENTER.lat - lat) * M_PER_DEG_LAT).toFixed(2), // z — на юг
 ];
+
+// Внешний контур мультиполигона OSM разбит на куски-линии, и порядок кусков
+// произвольный. Склеиваем их по совпадающим концам: без этого река
+// превращается в самопересекающуюся ленту, а не в берега.
+function stitchRings(members) {
+  const parts = members.filter((m) => m.geometry && m.geometry.length >= 2).map((m) => m.geometry.slice());
+  const key = (g) => `${g.lat.toFixed(7)},${g.lon.toFixed(7)}`;
+  const rings = [];
+  while (parts.length) {
+    let ring = parts.pop();
+    let grown = true;
+    while (grown) {
+      grown = false;
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        const head = key(ring[0]);
+        const tail = key(ring[ring.length - 1]);
+        if (key(p[0]) === tail) ring = ring.concat(p.slice(1));
+        else if (key(p[p.length - 1]) === tail) ring = ring.concat(p.slice(0, -1).reverse());
+        else if (key(p[p.length - 1]) === head) ring = p.slice(0, -1).concat(ring);
+        else if (key(p[0]) === head) ring = p.slice(1).reverse().concat(ring);
+        else continue;
+        parts.splice(i, 1);
+        grown = true;
+        break;
+      }
+    }
+    rings.push(ring);
+  }
+  return rings;
+}
+
+// Река тянется далеко за пределы выборки, поэтому режем контур по квадрату
+// мира: иначе в данные попадают берега за десяток километров отсюда.
+function clipRect(points, limit) {
+  const inside = (p, edge) => (edge === 0 ? p[0] >= -limit : edge === 1 ? p[0] <= limit : edge === 2 ? p[1] >= -limit : p[1] <= limit);
+  const cross = (a, b, edge) => {
+    const t = edge < 2
+      ? ((edge === 0 ? -limit : limit) - a[0]) / (b[0] - a[0])
+      : ((edge === 2 ? -limit : limit) - a[1]) / (b[1] - a[1]);
+    return [+(a[0] + (b[0] - a[0]) * t).toFixed(2), +(a[1] + (b[1] - a[1]) * t).toFixed(2)];
+  };
+  let out = points;
+  for (let edge = 0; edge < 4 && out.length; edge++) {
+    const src = out;
+    out = [];
+    for (let i = 0; i < src.length; i++) {
+      const cur = src[i];
+      const prev = src[(i + src.length - 1) % src.length];
+      const curIn = inside(cur, edge);
+      const prevIn = inside(prev, edge);
+      if (curIn) {
+        if (!prevIn) out.push(cross(prev, cur, edge));
+        out.push(cur);
+      } else if (prevIn) {
+        out.push(cross(prev, cur, edge));
+      }
+    }
+  }
+  return out;
+}
 
 /** Высота здания: сначала явная, потом по этажам, потом по типу. */
 function buildingHeight(tags) {
@@ -165,6 +227,15 @@ const green = [];
 
 for (const el of data.elements) {
   const tags = el.tags || {};
+  // Река приходит отношением из восьми кусков берега: сшиваем в кольцо и
+  // обрезаем по границе выборки.
+  if (el.type === 'relation' && tags.natural === 'water') {
+    for (const ring of stitchRings((el.members || []).filter((m) => m.role === 'outer'))) {
+      const pts = clipRect(ring.map((g) => toLocal(g.lat, g.lon)), RADIUS);
+      if (pts.length >= 3 && area(pts) > 400) water.push({ p: pts });
+    }
+    continue;
+  }
   const geom = el.geometry
     || (el.members || []).filter((m) => m.role === 'outer' && m.geometry).flatMap((m) => m.geometry);
   if (!geom || geom.length < 3) continue;

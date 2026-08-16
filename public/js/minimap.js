@@ -96,6 +96,19 @@ export class Minimap {
       ctx.fill();
     }
 
+    for (const area of this.world.water || []) {
+      if (!area.p || area.p.length < 3) continue;
+      ctx.fillStyle = COLORS.water;
+      ctx.beginPath();
+      area.p.forEach(([x, z], i) => {
+        const q = this.worldToBase(x, z);
+        if (i === 0) ctx.moveTo(q.x, q.y);
+        else ctx.lineTo(q.x, q.y);
+      });
+      ctx.closePath();
+      ctx.fill();
+    }
+
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     for (const road of this.world.roads || []) {

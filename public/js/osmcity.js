@@ -450,6 +450,30 @@ export function buildOsmCity(scene, world, quality = 'high') {
     greenGeos.forEach((g) => g.dispose());
   }
 
+  // --- вода ----------------------------------------------------------------
+  // Малая Кокшага делит центр надвое, и без неё набережная Брюгге стоит
+  // посреди газона. Кладём воду поверх земли: рельефа у нас нет.
+  const waterGeos = [];
+  for (const area of world.water || []) {
+    if (!area.p || area.p.length < 3) continue;
+    try {
+      // Ниже дорожного полотна: иначе вода заливает мосты через реку.
+      waterGeos.push(polygonPlane(area.p, 0.04));
+    } catch { /* кривой контур — пропускаем */ }
+  }
+  if (waterGeos.length) {
+    const river = new THREE.Mesh(
+      mergeGeometries(waterGeos, false),
+      rich
+        ? new THREE.MeshStandardMaterial({
+          color: 0x30536b, roughness: 0.12, metalness: 0.35, side: THREE.DoubleSide,
+        })
+        : new THREE.MeshLambertMaterial({ color: 0x30536b, side: THREE.DoubleSide }),
+    );
+    group.add(river);
+    waterGeos.forEach((g) => g.dispose());
+  }
+
   // --- улицы ---------------------------------------------------------------
   const roadGeos = [];
   const pathGeos = [];

@@ -150,6 +150,7 @@ export function generateOsmWorld(data) {
     streets: [...new Set(osm.roads.map((r) => r.n).filter(Boolean))].map((n) => ({ name: n })),
     roads: osm.roads,
     green: osm.green,
+    water: osm.water,
     carSpawns: carSpawns.length ? carSpawns : [{ x: 0, z: 0, yaw: 0 }],
     footSpawns: footSpawns.length ? footSpawns : [{ x: 0, z: 0, yaw: 0 }],
     bounds,
