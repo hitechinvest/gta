@@ -10,8 +10,33 @@ import { nearestRoad } from '/shared/osmworld.js';
 const MAX_CARS = 14;
 const SPAWN_MIN = 60;
 const SPAWN_MAX = 150;
-const DESPAWN = 210;
+// Мягкая граница — за спиной у игрока, жёсткая — совсем далеко: машина
+// не должна исчезать на глазах.
+const DESPAWN_SOFT = 150;
+const DESPAWN_HARD = 320;
+const WRECK_TIME = 40; // сколько секунд разбитая машина стоит на дороге
 const LANE = 4.2; // смещение от осевой линии: правостороннее движение
+
+/**
+ * Пересекаются ли кузова. Круг вокруг машины ловил бы встречную в соседней
+ * полосе: на узкой улице полосы всего в трёх метрах. Поэтому меряем в
+ * системе координат каждой машины по её длине и ширине.
+ */
+function overlap(a, b) {
+  return boxHit(a, b) && boxHit(b, a);
+}
+
+function boxHit(car, other) {
+  const dx = other.x - car.x;
+  const dz = other.z - car.z;
+  const cos = Math.cos(-car.yaw);
+  const sin = Math.sin(-car.yaw);
+  const localX = dx * cos - dz * sin;
+  const localZ = dx * sin + dz * cos;
+  const [w, , l] = car.def.size;
+  const [ow, , ol] = other.def.size;
+  return Math.abs(localX) < (w + ow) / 2 && Math.abs(localZ) < (l + ol) / 2;
+}
 
 export class Traffic {
   constructor(scene, world) {
@@ -191,17 +216,99 @@ export class Traffic {
     car.yaw = newAxis === 'z' ? (newDir > 0 ? 0 : Math.PI) : (newDir > 0 ? Math.PI / 2 : -Math.PI / 2);
   }
 
-  update(dt, px, pz, obstacles = []) {
+  /**
+   * Машина убирается только за спиной у игрока. Раньше она пропадала по
+   * дистанции, и на прямой улице это было видно: едет и вдруг исчезает.
+   */
+  outOfSight(car, px, pz, camera) {
+    const dist = Math.hypot(car.x - px, car.z - pz);
+    if (dist > DESPAWN_HARD) return true;
+    if (dist < DESPAWN_SOFT) return false;
+    if (!camera) return true;
+    // Взгляд камеры против направления на машину: сзади — можно убирать.
+    const fx = -Math.sin(camera.rotation.y);
+    const fz = -Math.cos(camera.rotation.y);
+    const len = Math.hypot(car.x - camera.position.x, car.z - camera.position.z) || 1;
+    const dot = ((car.x - camera.position.x) / len) * fx + ((car.z - camera.position.z) / len) * fz;
+    return dot < 0.1;
+  }
+
+  /**
+   * Столкновения в потоке. Машины разъезжаются заранее по blocked(), но на
+   * перекрёстках пути пересекаются — там раньше они проходили друг сквозь
+   * друга. Теперь бьются: встают, дымят, на сильном ударе загораются.
+   */
+  collide(all, effects) {
+    for (const car of this.cars) {
+      if (car.crashed) continue;
+      for (const other of all) {
+        if (other === car || other.crashed) continue;
+        if (!overlap(car, other)) continue;
+
+        // Сходятся или просто разъезжаются? Считаем скорость сближения:
+        // встречные машины в соседних полосах не должны считаться аварией.
+        const dx = other.x - car.x;
+        const dz = other.z - car.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const closing = (Math.sin(car.yaw) * car.speed - Math.sin(other.yaw) * (other.speed || 0)) * (dx / len)
+          + (Math.cos(car.yaw) * car.speed - Math.cos(other.yaw) * (other.speed || 0)) * (dz / len);
+        if (closing < 3) continue;
+
+        this.wreck(car, closing, effects);
+        if (this.cars.includes(other)) this.wreck(other, closing, effects);
+      }
+    }
+  }
+
+  /** Переводит машину в разбитое состояние. */
+  wreck(car, rel, effects) {
+    if (car.crashed) return;
+    car.crashed = true;
+    car.crashTimer = WRECK_TIME;
+    car.speed = 0;
+    car.braking = false;
+    car.smokeTimer = 0;
+    if (effects) {
+      effects.impact(new THREE.Vector3(car.x, 0.8, car.z), new THREE.Vector3(0, 1, 0), 'metal');
+    }
+    // Сильный удар — пожар, лёгкий — просто помятый капот и дым.
+    if (rel > 12) {
+      car.burning = true;
+      car.setDestroyed(effects);
+    }
+  }
+
+  /** Дым и огонь у разбитых машин. */
+  updateWrecks(dt, effects) {
+    for (const car of this.cars) {
+      if (!car.crashed) continue;
+      car.crashTimer -= dt;
+      car.smokeTimer -= dt;
+      if (car.smokeTimer <= 0 && effects) {
+        car.smokeTimer = car.burning ? 0.18 : 0.5;
+        effects.smoke(
+          new THREE.Vector3(car.x, car.burning ? 1.0 : 0.8, car.z),
+          car.burning ? 1.4 : 0.5,
+        );
+      }
+      car.update(dt, { lights: false, siren: false });
+    }
+  }
+
+  update(dt, px, pz, obstacles = [], camera = null, effects = null) {
     // Популяция вокруг игрока.
     for (let i = this.cars.length - 1; i >= 0; i--) {
       const car = this.cars[i];
-      if (Math.hypot(car.x - px, car.z - pz) > DESPAWN || car.health <= 0) {
+      const spent = car.crashed && car.crashTimer <= 0;
+      if (this.outOfSight(car, px, pz, camera) || spent) {
         car.dispose(this.scene);
         this.cars.splice(i, 1);
       }
     }
     const osm = !!this.world.osm;
-    while (this.cars.length < MAX_CARS) {
+    // Разбитые машины стоят на месте, поэтому в норму потока не считаются.
+    const alive = this.cars.filter((c) => !c.crashed).length;
+    for (let n = alive; n < MAX_CARS; n++) {
       const before = this.cars.length;
       if (osm) this.spawnOnRoad(px, pz);
       else this.spawnNear(px, pz);
@@ -212,6 +319,7 @@ export class Traffic {
 
     if (osm) {
       for (const car of this.cars) {
+        if (car.crashed) continue;
         const stop = this.blocked(car, 7 + car.speed * 0.45, all);
         car.speed += ((stop ? 0 : car.path.cruise) - car.speed) * Math.min(1, dt * (stop ? 4.5 : 1.6));
         car.braking = stop && car.speed > 1;
@@ -219,10 +327,14 @@ export class Traffic {
         car.syncMesh();
         car.update(dt, { lights: this.lights, siren: false });
       }
+      this.collide(all, effects);
+      this.updateWrecks(dt, effects);
+      for (const car of this.cars) car.syncMesh();
       return;
     }
 
     for (const car of this.cars) {
+      if (car.crashed) continue;
       const t = car.traffic;
       t.cooldown = Math.max(0, t.cooldown - dt);
 
@@ -244,6 +356,9 @@ export class Traffic {
       car.syncMesh();
       car.update(dt, { lights: this.lights, siren: false });
     }
+    this.collide(all, effects);
+    this.updateWrecks(dt, effects);
+    for (const car of this.cars) car.syncMesh();
   }
 
   clear() {

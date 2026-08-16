@@ -898,7 +898,7 @@ function update(dt) {
   game.traffic.update(dt, player.x, player.z, [
     ...(player.vehicle ? [player.vehicle] : []),
     ...game.cops.values(),
-  ]);
+  ], game.camera, game.effects);
   for (const car of game.traffic.cars) {
     if (Math.abs(car.speed) > 5) {
       game.peds.checkRunOver(car.x, car.z, car.speed, game.effects, false);
