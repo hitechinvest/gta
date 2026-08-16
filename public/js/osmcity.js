@@ -8,6 +8,7 @@ import {
   flemishFacade, khrushchevkaFacade, series125Facade, asphalt, groundTex,
   facadeLights, normalFromTexture, labelTexture, signTexture, facadePhoto,
 } from './textures.js';
+import { churchDomes } from './models.js';
 
 // Формы кровли из OSM. rise — доля от меньшей стороны дома: настоящий подъём
 // в данных почти не проставлен, а по пропорции он выходит правдоподобным.
@@ -202,6 +203,58 @@ function polyArea(points) {
     a += (points[j][0] + points[i][0]) * (points[j][1] - points[i][1]);
   }
   return Math.abs(a / 2);
+}
+
+/**
+ * Заправка: навес на четырёх стойках и две колонки под ним. Само здание
+ * кассы остаётся домом, а узнаваемой заправку делает именно навес.
+ */
+function fuelCanopy(w, d, h) {
+  const g = new THREE.Group();
+  const canopyW = Math.max(9, Math.min(w * 1.6, 18));
+  const canopyD = Math.max(7, Math.min(d * 1.6, 14));
+  const top = Math.max(5.4, h + 1.2); // под навесом должна проходить машина
+
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(canopyW, 0.55, canopyD),
+    new THREE.MeshLambertMaterial({ color: 0xe8e6e0 }),
+  );
+  roof.position.set(0, top, 0);
+  roof.castShadow = true;
+  g.add(roof);
+
+  // Фирменная полоса по краю навеса — по ней заправка читается издалека.
+  const band = new THREE.Mesh(
+    new THREE.BoxGeometry(canopyW + 0.12, 0.32, canopyD + 0.12),
+    new THREE.MeshLambertMaterial({ color: 0xd23a2a }),
+  );
+  band.position.set(0, top - 0.32, 0);
+  g.add(band);
+
+  const postM = new THREE.MeshLambertMaterial({ color: 0xb9bfc0 });
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.42, top, 0.42), postM);
+      post.position.set(sx * (canopyW / 2 - 0.8), top / 2, sz * (canopyD / 2 - 0.8));
+      post.castShadow = true;
+      g.add(post);
+    }
+  }
+
+  const pumpM = new THREE.MeshLambertMaterial({ color: 0xd9d6cc });
+  for (const sz of [-1, 1]) {
+    const pump = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.9, 0.7), pumpM);
+    pump.position.set(0, 0.95, sz * canopyD * 0.22);
+    pump.castShadow = true;
+    g.add(pump);
+    const island = new THREE.Mesh(
+      new THREE.BoxGeometry(3.4, 0.16, 1.4),
+      new THREE.MeshLambertMaterial({ color: 0x9aa0a6 }),
+    );
+    island.position.set(0, 0.08, sz * canopyD * 0.22);
+    g.add(island);
+  }
+  return g;
 }
 
 /** Плоский полигон (газон, вода, площадь) из контура. */
@@ -402,6 +455,29 @@ export function buildOsmCity(scene, world, quality = 'high') {
     sprite.scale.set(22, 5.5, 1);
     sprite.userData.building = b;
     labelGroup.add(sprite);
+  }
+
+  // --- храмы и заправки ----------------------------------------------------
+  // По контуру из OSM церковь неотличима от склада, а заправка — от сарая.
+  // Тип объекта в данных есть, поэтому дорисовываем то, что делает их
+  // узнаваемыми: главы с крестами и навес с колонками.
+  for (const b of world.buildings) {
+    if (b.kind === 'church' || b.amenity === 'place_of_worship') {
+      const size = Math.min(b.w, b.d);
+      const domes = churchDomes(Math.min(b.w, 18), Math.min(b.d, 18), b.h);
+      const k = THREE.MathUtils.clamp(size / 14, 0.6, 1.6);
+      // Масштаб тянет и высоту установки барабанов, поэтому опускаем группу
+      // обратно на карниз: иначе главы висят в воздухе над крышей.
+      domes.position.set(b.x, b.h * (1 - k), b.z);
+      domes.scale.setScalar(k);
+      group.add(domes);
+    } else if (b.amenity === 'fuel') {
+      const station = fuelCanopy(b.w, b.d, b.h);
+      // Навес стоит рядом с кассой, а не поверх неё: под ним должны
+      // помещаться машины.
+      station.position.set(b.x + b.w / 2 + 7, 0, b.z);
+      group.add(station);
+    }
   }
 
   // Крышная вывеска на самом высоком доме в центре: заметный ориентир,
