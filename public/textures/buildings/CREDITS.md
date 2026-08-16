@@ -10,7 +10,7 @@
 Лицензии: https://creativecommons.org/licenses/by-sa/4.0/deed.ru
 и https://creativecommons.org/licenses/by/4.0/deed.ru
 
-Всего снимков: 12.
+Всего снимков: 13.
 
 | Дом | Файл | Автор | Лицензия | Страница снимка |
 |---|---|---|---|---|
@@ -26,3 +26,4 @@
 | общий фасад (stalinka) | `building-of-a-city-administration-of-yoshkar-ola.jpg` | Alkort | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:Building_of_a_city_administration_of_Yoshkar-Ola.jpg |
 | общий фасад (stalinka) | `sovetskaya-street.jpg` | Alkort | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:Sovetskaya_street.jpg |
 | общий фасад (panel) | `the-highest-house-of-yoshkar-ola.jpg` | Alkort | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:The_highest_house_of_Yoshkar-Ola.jpg |
+| общий фасад (stalinka) | `дом-пчелиных-слева-и-вознесенская-церковь-справа.jpg` | Bulivif | CC BY-SA 3.0 | https://commons.wikimedia.org/wiki/File:%D0%94%D0%BE%D0%BC_%D0%9F%D1%87%D0%B5%D0%BB%D0%B8%D0%BD%D1%8B%D1%85(%D1%81%D0%BB%D0%B5%D0%B2%D0%B0)_%D0%B8_%D0%92%D0%BE%D0%B7%D0%BD%D0%B5%D1%81%D0%B5%D0%BD%D1%81%D0%BA%D0%B0%D1%8F_%D1%86%D0%B5%D1%80%D0%BA%D0%BE%D0%B2%D1%8C(%D1%81%D0%BF%D1%80%D0%B0%D0%B2%D0%B0).jpg |
