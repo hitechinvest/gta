@@ -2,7 +2,7 @@
 // уличные объекты. Всё собирается из примитивов, без внешних файлов.
 import * as THREE from 'three';
 import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
-import { VEHICLES } from '/shared/protocol.js';
+import { VEHICLES, PLAYER } from '/shared/protocol.js';
 import { signTexture, foliageTexture, faceTexture, clothTexture, skyCube, blobShadow } from './textures.js';
 import { assets } from './assets.js';
 
@@ -39,6 +39,20 @@ export const SKINS = [
  * Низкополигональный человечек с ручной анимацией ходьбы.
  * Возвращает группу с методом update(dt, state).
  */
+/**
+ * Приводит рост готовой модели человека к игровому. Иначе коллизия, камера
+ * и прицел считались бы по одному росту, а видели бы мы другой.
+ */
+function fitCharacterModel(root) {
+  const box = new THREE.Box3().setFromObject(root);
+  const height = box.max.y - box.min.y;
+  if (height < 0.2) return;
+  root.scale.setScalar(PLAYER.height / height);
+  root.updateMatrixWorld(true);
+  const fitted = new THREE.Box3().setFromObject(root);
+  root.position.y = -fitted.min.y;
+}
+
 export function createCharacter(skinIndex = 0) {
   const s = SKINS[skinIndex % SKINS.length];
   const root = new THREE.Group();
@@ -209,10 +223,12 @@ export function createCharacter(skinIndex = 0) {
 
   // Если в манифесте есть модель персонажа — подменяем ею процедурное тело.
   // Загрузка асинхронная, до её конца игрок видит обычного человечка.
-  if (assets.ready && assets.has('characters', 'ped')) {
-    assets.instance('characters', 'ped').then((inst) => {
+  const modelId = assets.has('characters', `ped${skinIndex}`) ? `ped${skinIndex}` : 'ped';
+  if (assets.ready && assets.has('characters', modelId)) {
+    assets.instance('characters', modelId).then((inst) => {
       if (!inst) return;
       hips.visible = false;
+      fitCharacterModel(inst.root);
       root.add(inst.root);
       root.userData.gltf = inst;
     });
@@ -383,6 +399,52 @@ function carBodyGeometry(bodyType, width, height, length) {
   geo.translate(width / 2 - bevel, 0, 0);
   geo.computeVertexNormals();
   return geo;
+}
+
+/**
+ * Подгоняет готовую модель под габариты из protocol.js и достаёт из неё
+ * колёса. Масштаб считается по длине и ширине, а не берётся из манифеста:
+ * так картинка и коллизии совпадают у любой модели.
+ */
+function fitVehicleModel(root, def, color) {
+  const [w, , l] = def.size;
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  if (size.x < 0.01 || size.z < 0.01) return [];
+
+  const scale = Math.min(l / size.z, w / size.x);
+  root.scale.setScalar(scale);
+  root.updateMatrixWorld(true);
+
+  // После масштабирования сажаем модель на землю и центрируем по кузову.
+  const fitted = new THREE.Box3().setFromObject(root);
+  const center = fitted.getCenter(new THREE.Vector3());
+  root.position.set(-center.x, -fitted.min.y, -center.z);
+
+  const wheels = [];
+  root.traverse((o) => {
+    if (!o.name || !o.name.startsWith('wheel')) return;
+    const wb = new THREE.Box3().setFromObject(o);
+    o.rotation.order = 'YXZ'; // поворот руля вокруг вертикали, вращение — вокруг оси
+    wheels.push({ mesh: o, front: o.name.includes('front'), radius: wb.getSize(new THREE.Vector3()).y / 2 });
+    // Кузов красим в цвет машины, колёса и стёкла оставляем как есть.
+  });
+
+  if (color != null) tintBody(root, color);
+  return wheels;
+}
+
+/**
+ * Перекрашивает кузов: у моделей Kenney все детали лежат в одном атласе,
+ * поэтому цвет накладывается умножением поверх текстуры только на кузов.
+ */
+function tintBody(root, color) {
+  root.traverse((o) => {
+    if (!o.isMesh || !o.name || !o.name.startsWith('body')) return;
+    o.material = o.material.clone();
+    o.material.color = new THREE.Color(color);
+    o.material.needsUpdate = true;
+  });
 }
 
 /**
@@ -624,12 +686,34 @@ export function createVehicle(type = 'zhiguli', color = 0xc9d3d9) {
 
   root.add(contactShadow(w * 2.1, l * 1.35, 0.55));
 
-  root.userData = { type, def, wheels, siren, heads, tails, headM, tailM, beams, spin: 0, steer: 0 };
+  root.userData = {
+    type, def, wheels, siren, heads, tails, headM, tailM, beams,
+    spin: 0, steer: 0, wheelR,
+  };
+
+  // Внешняя модель кузова, если она описана в манифесте. Из процедурной
+  // машины оставляем только конусы света: коробочки фар торчали бы мимо
+  // чужого кузова, а свет ночью нужен.
+  if (assets.ready && assets.has('vehicles', type)) {
+    const keep = new Set([beams]);
+    assets.instance('vehicles', type).then((inst) => {
+      if (!inst) return;
+      for (const child of group.children) if (!keep.has(child)) child.visible = false;
+      for (const wheel of wheels) wheel.mesh.visible = false;
+      const d = root.userData;
+      // Подгоняем до вставки в сцену: иначе габариты считались бы в мировых
+      // координатах вместе со смещением самой машины.
+      d.wheels = fitVehicleModel(inst.root, def, color);
+      root.add(inst.root);
+      d.wheelR = d.wheels[0]?.radius || wheelR;
+      d.gltf = inst;
+    });
+  }
 
   root.update = (dt, state = {}) => {
     const d = root.userData;
     const speed = state.speed || 0;
-    d.spin += (speed / (wheelR || 0.3)) * dt;
+    d.spin += (speed / (d.wheelR || 0.3)) * dt;
     d.steer += ((state.steer || 0) * 0.5 - d.steer) * Math.min(1, dt * 8);
     for (const wheel of d.wheels) {
       wheel.mesh.rotation.x = -d.spin;

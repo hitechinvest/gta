@@ -137,6 +137,68 @@ vaz2109: {
     colors: [0xe0c840, 0xe8e6e0, 0x3a6fb0],
     seats: 25, body: 'bus',
   },
+  // Иномарки: модели Kenney Car Kit (CC0). Габариты заданы в метрах, модель
+  // подгоняется под них — физика и картинка всегда совпадают.
+  hatchIm: {
+    id: 'hatchIm', name: 'Хэтчбек', size: [1.72, 1.44, 4.05], mass: 1.0,
+    maxSpeed: 40, accel: 18, brake: 30, grip: 6.0, steer: 1.02, health: 105,
+    colors: [0xd94a3a, 0xe8e6e0, 0x2a3b4a, 0x6b7d8a, 0x1a1a1e],
+    seats: 5, body: 'hatch', foreign: true,
+  },
+  sedanIm: {
+    id: 'sedanIm', name: 'Седан', size: [1.8, 1.46, 4.6], mass: 1.15,
+    maxSpeed: 42, accel: 17, brake: 29, grip: 5.8, steer: 0.94, health: 115,
+    colors: [0xe8e6e0, 0x1f2a33, 0x8a9aa5, 0x2b4c7e, 0x9a2f2f],
+    seats: 5, body: 'sedan', foreign: true,
+  },
+  sportIm: {
+    id: 'sportIm', name: 'Спорт-седан', size: [1.84, 1.4, 4.68], mass: 1.1,
+    maxSpeed: 48, accel: 22, brake: 33, grip: 6.6, steer: 1.0, health: 110,
+    colors: [0x1a1a1e, 0xd94a3a, 0xe0d24a, 0xb0b6ba],
+    seats: 4, body: 'sedan', foreign: true,
+  },
+  coupeIm: {
+    id: 'coupeIm', name: 'Пикап', size: [1.92, 1.95, 4.9], mass: 1.5,
+    maxSpeed: 33, accel: 13, brake: 24, grip: 5.0, steer: 0.84, health: 165,
+    colors: [0xe8e6e0, 0x2b4c7e, 0x8a5a2a, 0x4a5a3a],
+    seats: 3, body: 'truck', foreign: true,
+  },
+  crossIm: {
+    id: 'crossIm', name: 'Кроссовер', size: [1.86, 1.72, 4.55], mass: 1.3,
+    maxSpeed: 38, accel: 16, brake: 27, grip: 6.2, steer: 0.96, health: 140,
+    colors: [0xb9bfc0, 0x2f4a3a, 0x1f2a33, 0xd6d0c0],
+    seats: 5, body: 'suv', foreign: true,
+  },
+  suvIm: {
+    id: 'suvIm', name: 'Внедорожник', size: [1.96, 1.86, 4.92], mass: 1.5,
+    maxSpeed: 36, accel: 15, brake: 26, grip: 6.4, steer: 0.9, health: 175,
+    colors: [0x1a1a1e, 0xe8e6e0, 0x4a5a3a, 0x8a9aa5],
+    seats: 7, body: 'suv', foreign: true,
+  },
+  minivanIm: {
+    id: 'minivanIm', name: 'Минивэн', size: [1.9, 1.95, 4.75], mass: 1.4,
+    maxSpeed: 33, accel: 13, brake: 24, grip: 5.2, steer: 0.86, health: 150,
+    colors: [0xd6d0c0, 0x3a6fb0, 0xb9bfc0],
+    seats: 7, body: 'van', foreign: true,
+  },
+  vanIm: {
+    id: 'vanIm', name: 'Фургон', size: [2.02, 2.4, 5.35], mass: 1.8,
+    maxSpeed: 30, accel: 11, brake: 21, grip: 4.4, steer: 0.76, health: 200,
+    colors: [0xe6e6e6, 0xd94a3a, 0x3a6fb0],
+    seats: 3, body: 'van', foreign: true,
+  },
+  truckIm: {
+    id: 'truckIm', name: 'Грузовик', size: [2.35, 2.85, 6.6], mass: 2.8,
+    maxSpeed: 27, accel: 9, brake: 18, grip: 3.6, steer: 0.64, health: 300,
+    colors: [0x2b4c7e, 0xe6e6e6, 0x8a5a2a],
+    seats: 3, body: 'heavy', foreign: true,
+  },
+  taxiIm: {
+    id: 'taxiIm', name: 'Такси', size: [1.8, 1.62, 4.6], mass: 1.15,
+    maxSpeed: 40, accel: 16, brake: 28, grip: 5.6, steer: 0.94, health: 120,
+    colors: [0xe0c840],
+    seats: 5, body: 'sedan', foreign: true,
+  },
   dps: {
     id: 'dps', name: 'ДПС',
     size: [1.86, 1.5, 4.85], mass: 1.25, maxSpeed: 40, accel: 18, brake: 28,
@@ -146,10 +208,23 @@ vaz2109: {
   },
 };
 
+const DOMESTIC_CARS = [
+  'zhiguli', 'vaz2109', 'priora', 'vesta', 'largus', 'moskvich', 'zaporozhets',
+  'volga', 'niva', 'uazPatriot', 'bukhanka', 'gazelle', 'sobol', 'kamaz', 'paz',
+];
+
+const FOREIGN_CARS = [
+  'hatchIm', 'sedanIm', 'sportIm', 'coupeIm', 'crossIm', 'suvIm',
+  'minivanIm', 'vanIm', 'truckIm', 'taxiIm',
+];
+
+/**
+ * Из этого списка случайно выбираются машины на улицах. Доли заданы
+ * повторами: 10 иномарок по 7 записей против 15 наших по 2 — ровно 70 на 30.
+ */
 export const VEHICLE_ORDER = [
-  'zhiguli', 'zhiguli', 'vaz2109', 'vaz2109', 'priora', 'vesta', 'largus',
-  'moskvich', 'zaporozhets', 'volga', 'niva', 'uazPatriot', 'bukhanka',
-  'gazelle', 'sobol', 'kamaz', 'paz',
+  ...FOREIGN_CARS.flatMap((id) => Array(7).fill(id)),
+  ...DOMESTIC_CARS.flatMap((id) => Array(2).fill(id)),
 ];
 
 export const WANTED = {

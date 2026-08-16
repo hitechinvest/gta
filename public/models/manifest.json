@@ -1,6 +1,126 @@
 {
-  "_comment": "Пустые группы — игра рисует процедурно. Опишите модели здесь, см. README.md",
-  "characters": {},
-  "vehicles": {},
+  "_comment": "Модели Kenney (CC0): люди — Blocky Characters, машины — Car Kit. См. README.md",
+  "characters": {
+    "ped0": {
+      "url": "people/character-a.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    },
+    "ped1": {
+      "url": "people/character-b.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    },
+    "ped2": {
+      "url": "people/character-c.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    },
+    "ped3": {
+      "url": "people/character-d.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    },
+    "ped4": {
+      "url": "people/character-e.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    },
+    "ped5": {
+      "url": "people/character-f.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    },
+    "ped6": {
+      "url": "people/character-g.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    },
+    "ped7": {
+      "url": "people/character-h.glb",
+      "clips": {
+        "idle": "idle",
+        "walk": "walk",
+        "run": "sprint",
+        "aim": "holding-right",
+        "die": "die",
+        "sit": "drive"
+      }
+    }
+  },
+  "vehicles": {
+    "hatchIm": {
+      "url": "cars/hatchback-sports.glb"
+    },
+    "sedanIm": {
+      "url": "cars/sedan.glb"
+    },
+    "sportIm": {
+      "url": "cars/sedan-sports.glb"
+    },
+    "coupeIm": {
+      "url": "cars/delivery-flat.glb"
+    },
+    "crossIm": {
+      "url": "cars/suv.glb"
+    },
+    "suvIm": {
+      "url": "cars/suv-luxury.glb"
+    },
+    "minivanIm": {
+      "url": "cars/van.glb"
+    },
+    "vanIm": {
+      "url": "cars/delivery.glb"
+    },
+    "truckIm": {
+      "url": "cars/truck.glb"
+    },
+    "taxiIm": {
+      "url": "cars/taxi.glb"
+    }
+  },
   "props": {}
 }
