@@ -10,7 +10,7 @@
 Лицензии: https://creativecommons.org/licenses/by-sa/4.0/deed.ru
 и https://creativecommons.org/licenses/by/4.0/deed.ru
 
-Всего снимков: 11.
+Всего снимков: 12.
 
 | Дом | Файл | Автор | Лицензия | Страница снимка |
 |---|---|---|---|---|
@@ -25,3 +25,4 @@
 | Советская улица, 102 — Дом Булыгина | `йошкар-ола-улица-советская-102.jpg` | Liasmi | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%99%D0%BE%D1%88%D0%BA%D0%B0%D1%80-%D0%9E%D0%BB%D0%B0,_%D1%83%D0%BB%D0%B8%D1%86%D0%B0_%D0%A1%D0%BE%D0%B2%D0%B5%D1%82%D1%81%D0%BA%D0%B0%D1%8F,_102.jpg |
 | общий фасад (stalinka) | `building-of-a-city-administration-of-yoshkar-ola.jpg` | Alkort | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:Building_of_a_city_administration_of_Yoshkar-Ola.jpg |
 | общий фасад (stalinka) | `sovetskaya-street.jpg` | Alkort | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:Sovetskaya_street.jpg |
+| общий фасад (panel) | `the-highest-house-of-yoshkar-ola.jpg` | Alkort | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:The_highest_house_of_Yoshkar-Ola.jpg |
