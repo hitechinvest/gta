@@ -9,6 +9,7 @@ import { LocalPlayer } from './player.js';
 import { VehicleEntity } from './vehicle.js';
 import { RemotePlayer } from './remote.js';
 import { Peds } from './peds.js';
+import { Traffic } from './traffic.js';
 import { Effects } from './effects.js';
 import { Hud } from './hud.js';
 import { Minimap } from './minimap.js';
@@ -136,6 +137,7 @@ async function start(name, skin) {
 
   game.effects = new Effects(game.scene);
   game.peds = new Peds(game.scene, game.world);
+  game.traffic = new Traffic(game.scene, game.world);
   game.hud = new Hud();
   game.minimap = new Minimap(document.getElementById('minimap'), game.world);
   game.input = new Input(game.renderer.domElement);
@@ -868,6 +870,15 @@ function update(dt) {
     r.update(dt, game.camera);
   }
 
+  // Трафик: сам объезжает игрока, а игрок может в него врезаться.
+  game.traffic.update(dt, player.x, player.z, [
+    ...(player.vehicle ? [player.vehicle] : []),
+    ...game.cops.values(),
+  ]);
+  for (const car of game.traffic.cars) {
+    if (Math.abs(car.speed) > 5) game.peds.checkRunOver(car.x, car.z, car.speed, game.effects);
+  }
+
   // Прохожие и эффекты.
   game.peds.update(dt, player.x, player.z);
   game.effects.update(dt);
@@ -902,7 +913,9 @@ function updateDriving(dt) {
     handbrake: input.braking,
   };
 
-  const impact = v.drive(dt, controls, game.world, [...game.vehicles.values(), ...game.cops.values()]);
+  const impact = v.drive(dt, controls, game.world, [
+    ...game.vehicles.values(), ...game.cops.values(), ...game.traffic.cars,
+  ]);
   if (impact > 4) {
     const dmg = Math.min(40, impact * 2.4);
     game.net.send({ t: 'vdamage', i: v.id, d: dmg });
