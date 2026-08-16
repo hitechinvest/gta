@@ -26,6 +26,9 @@ import { assets } from './assets.js';
 import { loadWallPhotos, loadFacadePhotos } from './textures.js';
 
 const DAY_LENGTH = 600; // секунд на полный цикл суток
+// Дальность прорисовки машин: за этой границей кузов не разглядеть, а
+// каждый стоит десятков вызовов отрисовки.
+const VEHICLE_DRAW_DIST = 170;
 
 const game = {
   scene: null,
@@ -55,6 +58,9 @@ const game = {
   sirenTimer: 0,
   deathUntil: 0,
   fps: 60,
+  // Дальность прорисовки машин: вынесена в состояние, чтобы её можно было
+  // померить и подкрутить прямо в консоли.
+  drawDist: VEHICLE_DRAW_DIST,
 };
 
 // --- меню -------------------------------------------------------------------
@@ -852,17 +858,22 @@ function update(dt) {
   if (!game.crosshair) game.crosshair = document.getElementById('crosshair');
   game.crosshair.classList.toggle('show', input.locked && (player.aiming || !player.vehicle));
 
-  // Машины.
+  // Машины. Полсотни припаркованных по всему городу — это несколько тысяч
+  // мешей: дальние прячем целиком, иначе они рисуются даже за горизонтом.
   const vehicleList = [...game.vehicles.values()];
   const renderTime = Date.now() + game.serverOffset - NET.INTERP_DELAY;
   for (const v of vehicleList) {
     if (player.vehicle && v.id === player.vehicle.id) {
+      v.mesh.visible = true;
       v.update(dt, { lights: v.lights || isNight(), siren: false });
       continue;
     }
+    const near = Math.hypot(v.x - player.x, v.z - player.z) < game.drawDist;
+    v.mesh.visible = near;
     if (v.driver) v.interpolate(renderTime);
     else v.coast(dt, game.world);
-    v.update(dt, { lights: isNight(), siren: v.def.police && !!v.driver });
+    // Далёкую машину незачем анимировать: колёса и фары не видно.
+    if (near) v.update(dt, { lights: isNight(), siren: v.def.police && !!v.driver });
   }
 
   for (const cop of game.cops.values()) {
