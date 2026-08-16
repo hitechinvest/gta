@@ -742,9 +742,10 @@ export function resolveCircle(world, x, z, radius, out = { x: 0, z: 0, hit: fals
     }
   }
 
+  // Границы берём у самого мира: у реального города они шире квартальной сетки.
   const pad = radius + 2;
-  const min = CONFIG.origin + pad;
-  const max = CONFIG.origin + CONFIG.total - pad;
+  const min = (world.bounds ? world.bounds.min : CONFIG.origin) + pad;
+  const max = (world.bounds ? world.bounds.max : CONFIG.origin + CONFIG.total) - pad;
   if (out.x < min) { out.x = min; out.nx = 1; out.hit = true; }
   if (out.x > max) { out.x = max; out.nx = -1; out.hit = true; }
   if (out.z < min) { out.z = min; out.nz = 1; out.hit = true; }

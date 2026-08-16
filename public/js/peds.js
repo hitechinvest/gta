@@ -2,12 +2,16 @@
 // стрельбы и попадают под колёса (за это начисляется розыск).
 import * as THREE from 'three';
 import { CONFIG, roadCenter, resolveCircle } from '/shared/worldgen.js';
+import { buildNet, randomNodeNear, pickNextLink, NET_WALK } from '/shared/roadnet.js';
 import { createCharacter, SKINS } from './models.js';
 
 const tmpRes = { x: 0, z: 0, hit: false, nx: 0, nz: 0 };
 const MAX_PEDS = 16;
 const SPAWN_RADIUS = 95;
 const DESPAWN_RADIUS = 130;
+// На перекрёстке пешеход сходит с тротуара на осевую: так он переходит
+// дорогу по зебре, а не перепрыгивает между сторонами улицы.
+const CROSS_RAMP = 6;
 
 function nearestSidewalkLine(v) {
   const i = Math.round((v - CONFIG.origin - CONFIG.road / 2) / CONFIG.pitch);
@@ -21,9 +25,87 @@ export class Peds {
     this.world = world;
     this.list = [];
     this.onKilled = null;
+    // В реальном городе кварталов нет — ходим по настоящим тротуарам.
+    this.net = world.osm ? buildNet(world.roads, NET_WALK) : null;
+  }
+
+  /** Стартовое место на тротуаре: случайный узел сети в кольце вокруг игрока. */
+  spawnOnNet(cx, cz) {
+    const from = randomNodeNear(this.net, cx, cz, 30, SPAWN_RADIUS);
+    if (from < 0) return;
+    const node = this.net.nodes[from];
+    const link = node.links[Math.floor(Math.random() * node.links.length)];
+    if (!link) return;
+
+    const mesh = createCharacter(Math.floor(Math.random() * SKINS.length));
+    this.scene.add(mesh);
+    const p = {
+      mesh,
+      x: node.x, z: node.z, yaw: 0,
+      from, to: link.to, link, t: Math.random() * 0.4,
+      side: Math.random() < 0.5 ? 1 : -1,
+      speed: 1.1 + Math.random() * 0.7,
+      panic: 0,
+      dead: false,
+      deadTimer: 0,
+      wander: 0,
+    };
+    this.place(p);
+    mesh.position.set(p.x, 0, p.z);
+    this.list.push(p);
+  }
+
+  /** Точка на текущем ребре с учётом тротуарного смещения. */
+  place(p) {
+    const a = this.net.nodes[p.from];
+    const b = this.net.nodes[p.to];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const fx = dx / len;
+    const fz = dz / len;
+
+    // У перекрёстков и тупиков смещение сходит на нет: тротуары разных улиц
+    // сходятся к одной точке, и без этого пешеход телепортировался бы поперёк.
+    let k = 1;
+    if (a.links.length !== 2) k = Math.min(k, Math.min(1, (p.t * len) / CROSS_RAMP));
+    if (b.links.length !== 2) k = Math.min(k, Math.min(1, ((1 - p.t) * len) / CROSS_RAMP));
+    const off = p.link.offset * p.side * k;
+
+    p.x = a.x + dx * p.t + fz * off;
+    p.z = a.z + dz * p.t - fx * off;
+    p.yaw = Math.atan2(fx, fz);
+    p.len = len;
+  }
+
+  /** Продвижение по сети с переходом на следующее ребро на перекрёстке. */
+  advanceOnNet(p, dist) {
+    let remaining = dist;
+    for (let guard = 0; guard < 6 && remaining > 0; guard++) {
+      const a = this.net.nodes[p.from];
+      const b = this.net.nodes[p.to];
+      const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      p.t += remaining / len;
+      if (p.t < 1) { remaining = 0; break; }
+
+      remaining = (p.t - 1) * len;
+      const fx = (b.x - a.x) / len;
+      const fz = (b.z - a.z) / len;
+      const next = pickNextLink(this.net, p.to, p.from, fx, fz);
+      if (!next) { p.t = 1; break; }
+      p.from = p.to;
+      p.to = next.to;
+      p.link = next;
+      p.t = 0;
+    }
+    this.place(p);
   }
 
   spawnNear(cx, cz) {
+    if (this.net) {
+      this.spawnOnNet(cx, cz);
+      return;
+    }
     const angle = Math.random() * Math.PI * 2;
     const dist = 30 + Math.random() * (SPAWN_RADIUS - 30);
     let x = cx + Math.cos(angle) * dist;
@@ -157,6 +239,15 @@ export class Peds {
       if (p.dead) continue;
       const panicking = p.panic > 0;
       if (panicking) p.panic -= dt;
+
+      if (this.net) {
+        const speed = panicking ? p.speed * 2.6 : p.speed;
+        this.advanceOnNet(p, speed * dt);
+        p.mesh.position.set(p.x, 0, p.z);
+        p.mesh.rotation.y = p.yaw;
+        p.mesh.update(dt, { speed, dead: false });
+        continue;
+      }
 
       p.wander -= dt;
       if (p.wander <= 0) {

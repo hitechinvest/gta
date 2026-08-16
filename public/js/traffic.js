@@ -152,9 +152,11 @@ export class Traffic {
       if (o === car) continue;
       if (Math.hypot(o.x - px, o.z - pz) < 3.6) return true;
     }
-    // Край карты — тоже препятствие.
-    const lim = CONFIG.origin + CONFIG.total - 8;
-    if (px < CONFIG.origin + 8 || px > lim || pz < CONFIG.origin + 8 || pz > lim) return true;
+    // Край карты — тоже препятствие. Границы у реального города свои.
+    const b = this.world.bounds || { min: CONFIG.origin, max: CONFIG.origin + CONFIG.total };
+    const lo = b.min + 8;
+    const hi = b.max - 8;
+    if (px < lo || px > hi || pz < lo || pz > hi) return true;
     return false;
   }
 
