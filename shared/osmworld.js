@@ -151,6 +151,7 @@ export function generateOsmWorld(data) {
     roads: osm.roads,
     green: osm.green,
     water: osm.water,
+    sights: osm.sights || [],
     carSpawns: carSpawns.length ? carSpawns : [{ x: 0, z: 0, yaw: 0 }],
     footSpawns: footSpawns.length ? footSpawns : [{ x: 0, z: 0, yaw: 0 }],
     bounds,

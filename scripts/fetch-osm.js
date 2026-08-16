@@ -52,6 +52,8 @@ const QUERY = `
   way["natural"="water"](${BBOX});
   way["waterway"="riverbank"](${BBOX});
   relation["natural"="water"]["type"="multipolygon"](${BBOX});
+  way["historic"="castle"](${BBOX});
+  way["barrier"="city_wall"](${BBOX});
   way["leisure"~"^(park|garden|pitch|playground)$"](${BBOX});
   way["landuse"~"^(grass|forest|cemetery|industrial)$"](${BBOX});
 );
@@ -224,6 +226,9 @@ const buildings = [];
 const roads = [];
 const water = [];
 const green = [];
+// Крепостные стены: в OSM у кремля есть контур, но нет ни одного здания,
+// поэтому по этому контуру мы потом узнаём его стены и башни.
+const sights = [];
 
 for (const el of data.elements) {
   const tags = el.tags || {};
@@ -276,6 +281,8 @@ for (const el of data.elements) {
       k: tags.highway,
       n: tags.name || '',
     });
+  } else if (tags.historic === 'castle' || tags.barrier === 'city_wall') {
+    if (pts.length >= 3) sights.push({ p: pts, k: 'castle', n: tags.name || '' });
   } else if (tags.natural === 'water' || tags.waterway === 'riverbank') {
     if (pts.length >= 3) water.push({ p: pts });
   } else if (tags.leisure || tags.landuse) {
@@ -294,6 +301,7 @@ const out = {
   roads,
   water,
   green,
+  sights,
 };
 
 mkdirSync(resolve(ROOT, dirname(OUT)), { recursive: true });
@@ -302,5 +310,5 @@ writeFileSync(resolve(ROOT, OUT), JSON.stringify(out));
 const named = buildings.filter((b) => b.n).length;
 const addressed = buildings.filter((b) => b.hn).length;
 console.log(`[osm] здания: ${buildings.length} (с названиями: ${named}, с адресами: ${addressed})`);
-console.log(`[osm] дороги: ${roads.length}, вода: ${water.length}, зелень: ${green.length}`);
+console.log(`[osm] дороги: ${roads.length}, вода: ${water.length}, зелень: ${green.length}, ориентиры: ${sights.length}`);
 console.log(`[osm] сохранено в ${OUT}`);

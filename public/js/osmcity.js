@@ -5,10 +5,11 @@ import * as THREE from 'three';
 import { mergeGeometries } from '/vendor/BufferGeometryUtils.js';
 import {
   panelFacade, stalinkaFacade, factoryFacade, privateFacade, garageFacade,
-  flemishFacade, khrushchevkaFacade, series125Facade, asphalt, groundTex,
+  flemishFacade, khrushchevkaFacade, series125Facade, asphalt, groundTex, castleFacade, brickWall,
   facadeLights, normalFromTexture, labelTexture, signTexture, facadePhoto, poolPhoto,
 } from './textures.js';
 import { churchDomes, propPrototypes } from './models.js';
+import { landmarkStyle, buildLandmark } from './landmarks3d.js';
 
 // Формы кровли из OSM. rise — доля от меньшей стороны дома: настоящий подъём
 // в данных почти не проставлен, а по пропорции он выходит правдоподобным.
@@ -23,13 +24,23 @@ const ROOF_SHAPES = {
 };
 const DEFAULT_ROOF_COLOR = 0x8a4a3a; // некрашеная кровля центра — рыжий шифер
 
+// Тайлы фасадов ориентиров: кирпич мельче жилой панели, фламандский дом уже.
+const LANDMARK_TILE = { brick: [4.2, 3.2], castle: [7, 6], flemish: [5.6, 3.5] };
+
 const FACADE_TILE = {
   panel: [6.4, 5.8], tower: [6.4, 5.8], stalinka: [7.2, 7.2], factory: [12, 9],
   private: [6, 5], garage: [4, 3], church: [8, 8], flemish: [5.6, 3.5],
   khrushchevka: [6.5, 5.6], series125: [7, 5.8],
 };
 
-function facadeTexture(b) {
+function facadeTexture(b, style) {
+  // Фасад ориентира важнее типа застройки: кремлёвская стена — кирпич,
+  // собор — белёная стена, дом на набережной — фламандский фронтон.
+  if (style) {
+    if (style.facade === 'brick') return brickWall(style.color);
+    if (style.facade === 'castle') return castleFacade(style.color);
+    if (style.facade === 'flemish') return flemishFacade(b.color);
+  }
   switch (b.kind) {
     case 'panel': case 'tower': return panelFacade(b.color, true);
     case 'stalinka': case 'church': return stalinkaFacade(b.color);
@@ -518,26 +529,34 @@ export function buildOsmCity(scene, world, quality = 'high') {
     bucket.push(geo);
   };
 
+  // Ориентиры: у них свой фасад и надстройки, поэтому стиль считаем заранее.
+  const landmarks = [];
   for (const b of world.buildings) {
+    const style = landmarkStyle(b, world.sights);
+    if (style) landmarks.push({ b, style });
     // Дом, который сфотографировали, получает свой материал: одна фотография
     // на один адрес, делить её с другими домами нельзя.
     // Сначала снимок этого самого дома, потом общий по типу застройки.
     // Общие снимки — это малоэтажная застройка центра, поэтому на башню
     // такой фасад не натягиваем: получилась бы гармошка из пяти крыш.
-    const own = facadePhoto(b.address);
-    const pooled = !own && b.h <= 14
+    // На ориентире фотография чужого дома всё портит: у кремлёвской стены
+    // не бывает пластиковых окон.
+    const own = style ? null : facadePhoto(b.address);
+    const pooled = !own && !style && b.h <= 14
       ? poolPhoto(b.kind, b.address || `${b.x.toFixed(0)}:${b.z.toFixed(0)}`)
       : null;
     const photo = own || pooled;
-    const key = own ? `photo-${b.address}` : (pooled ? `pool-${pooled.uuid}` : `${b.kind}-${b.color}`);
+    const key = own
+      ? `photo-${b.address}`
+      : (pooled ? `pool-${pooled.uuid}` : (style ? `lm-${style.facade}-${style.color || b.color}` : `${b.kind}-${b.color}`));
     if (!byMaterial.has(key)) {
-      const tex = (photo || facadeTexture(b)).clone();
+      const tex = (photo || facadeTexture(b, style)).clone();
       // Фотография растягивается на фасад целиком, процедурный тайл — по метрам.
       // Снимок конкретного дома растягиваем на весь фасад, общий повторяем
       // каждые двадцать метров: иначе окна на длинном корпусе размером с ворота.
       const tile = photo
         ? [own ? Math.max(b.w, b.d) : Math.min(26, Math.max(14, b.w)), b.h]
-        : (FACADE_TILE[b.kind] || [6.4, 5.8]);
+        : (style ? (LANDMARK_TILE[style.facade] || [6.4, 5.8]) : (FACADE_TILE[b.kind] || [6.4, 5.8]));
       // Выдавливание нумерует UV в метрах, поэтому масштаб задаём повтором.
       tex.repeat.set(1 / tile[0], 1 / tile[1]);
       tex.needsUpdate = true;
@@ -565,9 +584,12 @@ export function buildOsmCity(scene, world, quality = 'high') {
     }
 
     try {
+      // У башен OSM даёт высоту по умолчанию — двенадцать метров; настоящую
+      // подставляет стиль ориентира.
+      const height = (style && style.height) || b.h;
       const shape = new THREE.Shape(b.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
       const geo = new THREE.ExtrudeGeometry(shape, {
-        depth: b.h, bevelEnabled: false, curveSegments: 1,
+        depth: height, bevelEnabled: false, curveSegments: 1,
       });
       // Выдавливание идёт по +Z: разворачиваем контур в горизонталь.
       geo.rotateX(-Math.PI / 2);
@@ -578,8 +600,8 @@ export function buildOsmCity(scene, world, quality = 'high') {
       const roof = new THREE.Shape(b.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
       const roofGeo = new THREE.ExtrudeGeometry(roof, { depth: 0.35, bevelEnabled: false, curveSegments: 1 });
       roofGeo.rotateX(-Math.PI / 2);
-      roofGeo.translate(0, b.h + 0.35, 0);
-      pushRoof(roofGeo, b.roofColor);
+      roofGeo.translate(0, height + 0.35, 0);
+      pushRoof(roofGeo, (style && style.roofColor) || b.roofColor);
 
       // Скатная кровля поверх плиты, если форма известна из OSM.
       const roofShape = ROOF_SHAPES[b.roof];
@@ -587,7 +609,7 @@ export function buildOsmCity(scene, world, quality = 'high') {
         const rise = b.roofLevels
           ? b.roofLevels * 2.6
           : Math.min(6.5, Math.max(1.8, Math.min(b.w, b.d) * roofShape.rise));
-        const pitched = pitchedRoof(b.poly, b.roof, b.h + 0.35, rise);
+        const pitched = pitchedRoof(b.poly, b.roof, height + 0.35, rise);
         if (pitched) pushRoof(pitched, b.roofColor || DEFAULT_ROOF_COLOR);
       }
     } catch {
@@ -612,6 +634,12 @@ export function buildOsmCity(scene, world, quality = 'high') {
     roofs.castShadow = true;
     group.add(roofs);
     geos.forEach((g) => g.dispose());
+  }
+
+  // --- надстройки ориентиров ------------------------------------------------
+  for (const { b, style } of landmarks) {
+    const extra = buildLandmark(b, style);
+    if (extra) group.add(extra);
   }
 
   // --- таблички с названиями и адресами ------------------------------------
@@ -650,7 +678,9 @@ export function buildOsmCity(scene, world, quality = 'high') {
     if (b.kind === 'church' || b.amenity === 'place_of_worship') {
       const size = Math.min(b.w, b.d);
       const domes = churchDomes(Math.min(b.w, 18), Math.min(b.d, 18), b.h);
-      const k = THREE.MathUtils.clamp(size / 14, 0.6, 1.6);
+      // Соборы в центре крупные: у собора в полсотни метров главы масштаба
+      // сельской часовни теряются на кровле.
+      const k = THREE.MathUtils.clamp(size / 14, 0.7, 2.8);
       // Масштаб тянет и высоту установки барабанов, поэтому опускаем группу
       // обратно на карниз: иначе главы висят в воздухе над крышей.
       domes.position.set(b.x, b.h * (1 - k), b.z);
