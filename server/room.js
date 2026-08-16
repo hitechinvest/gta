@@ -171,7 +171,14 @@ export class Room {
 
   randomFootSpawn() {
     const list = this.world.footSpawns;
-    const s = list[Math.floor(Math.random() * list.length)];
+    // После расширения карты до полутора километров игроки высаживались
+    // и на окраинных проездах, за километр друг от друга. Держим их в
+    // историческом центре, если такие точки есть.
+    const central = this.world.osm
+      ? list.filter((s) => Math.hypot(s.x, s.z) < 800)
+      : list;
+    const pool = central.length > 20 ? central : list;
+    const s = pool[Math.floor(Math.random() * pool.length)];
     return { x: s.x, z: s.z, yaw: s.yaw };
   }
 

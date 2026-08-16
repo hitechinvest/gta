@@ -10,6 +10,7 @@ import { nearestRoad } from '/shared/osmworld.js';
 const MAX_CARS = 14;
 const SPAWN_MIN = 60;
 const SPAWN_MAX = 150;
+const CELL = 96; // сторона ячейки индекса улиц
 // Мягкая граница — за спиной у игрока, жёсткая — совсем далеко: машина
 // не должна исчезать на глазах.
 const DESPAWN_SOFT = 150;
@@ -60,13 +61,49 @@ export class Traffic {
     return this.roads;
   }
 
+  /**
+   * Сетка сегментов по ячейкам. Улиц в городе три тысячи, и слепой выбор
+   * случайной почти всегда попадал за километр от игрока: после расширения
+   * мира поток из четырнадцати машин выродился в одну.
+   */
+  segmentGrid() {
+    if (this.grid) return this.grid;
+    this.grid = new Map();
+    for (const road of this.drivableRoads()) {
+      for (let i = 1; i < road.p.length; i++) {
+        const [ax, az] = road.p[i - 1];
+        const [bx, bz] = road.p[i];
+        const key = `${Math.floor((ax + bx) / 2 / CELL)}:${Math.floor((az + bz) / 2 / CELL)}`;
+        let cell = this.grid.get(key);
+        if (!cell) this.grid.set(key, cell = []);
+        cell.push({ road, i });
+      }
+    }
+    return this.grid;
+  }
+
+  /** Сегменты в кольце спавна вокруг точки. */
+  segmentsNear(cx, cz) {
+    const grid = this.segmentGrid();
+    const out = [];
+    const r = Math.ceil(SPAWN_MAX / CELL);
+    const gx = Math.floor(cx / CELL);
+    const gz = Math.floor(cz / CELL);
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dz = -r; dz <= r; dz++) {
+        const cell = grid.get(`${gx + dx}:${gz + dz}`);
+        if (cell) out.push(...cell);
+      }
+    }
+    return out;
+  }
+
   /** Спавн на реальной улице: машина встаёт на сегмент и едет по нему. */
   spawnOnRoad(cx, cz) {
-    const roads = this.drivableRoads();
-    if (!roads.length) return;
+    const near = this.segmentsNear(cx, cz);
+    if (!near.length) return;
     for (let tries = 0; tries < 60; tries++) {
-      const road = roads[Math.floor(Math.random() * roads.length)];
-      const i = 1 + Math.floor(Math.random() * (road.p.length - 1));
+      const { road, i } = near[Math.floor(Math.random() * near.length)];
       const [ax, az] = road.p[i - 1];
       const [bx, bz] = road.p[i];
       const t = Math.random();
