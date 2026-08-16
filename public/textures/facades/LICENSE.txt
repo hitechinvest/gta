@@ -1,0 +1,10 @@
+Фотофактуры фасадов: ambientCG (ambientcg.com), лицензия CC0 1.0.
+Съёмка реальных поверхностей (PBR photogrammetry), уменьшены до 512x512.
+
+bricks075a.jpg        — силикатный жёлтый кирпич
+bricks085.jpg         — красный кирпич промышленной кладки
+bricks101.jpg         — облицовочный кирпич
+concrete025.jpg       — бетонная панель
+paintedplaster017.jpg — светлая крашеная штукатурка
+paintedplaster018.jpg — жёлтая крашеная штукатурка
+woodsiding009.jpg     — деревянная обшивка

@@ -39,6 +39,64 @@ function hex(color) {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
 
+// --- фотофактуры стен -------------------------------------------------------
+// Нарисованная кладка вблизи выдаёт себя сразу, поэтому под окна кладём
+// настоящую съёмку поверхностей (ambientCG, CC0). Файлы загружаются один раз
+// до сборки города, дальше рисование остаётся синхронным.
+
+const PHOTO_FILES = {
+  brickWhite: 'bricks075a.jpg',
+  brickRed: 'bricks085.jpg',
+  brickFace: 'bricks101.jpg',
+  concrete: 'concrete025.jpg',
+  plasterLight: 'paintedplaster017.jpg',
+  plasterWarm: 'paintedplaster018.jpg',
+  wood: 'woodsiding009.jpg',
+};
+const photos = new Map();
+
+/** Грузит фотофактуры. Не загрузились — рисуем как раньше, без них. */
+export async function loadWallPhotos(base = '/textures/facades/') {
+  await Promise.all(Object.entries(PHOTO_FILES).map(([id, file]) => new Promise((done) => {
+    const img = new Image();
+    img.onload = () => { photos.set(id, img); done(); };
+    img.onerror = () => { console.warn(`[текстуры] нет фото ${file}`); done(); };
+    img.src = base + file;
+  })));
+  console.info(`[текстуры] фотофактуры фасадов: ${photos.size} из ${Object.keys(PHOTO_FILES).length}`);
+  return photos.size;
+}
+
+export function hasWallPhotos() {
+  return photos.size > 0;
+}
+
+/**
+ * Кладёт фото стены под будущие окна и подмешивает цвет дома: одна и та же
+ * съёмка должна давать и охристую сталинку, и серую панель.
+ * tiles — сколько раз фактура повторится по ширине текстуры.
+ */
+function wallPhoto(ctx, W, H, id, color, tiles = 2, tint = 0.5) {
+  const img = photos.get(id);
+  if (!img) return false;
+  const step = W / tiles;
+  for (let x = 0; x < W; x += step) {
+    for (let y = 0; y < H; y += step) ctx.drawImage(img, x, y, step, step);
+  }
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = tint;
+  ctx.fillStyle = hex(color);
+  ctx.fillRect(0, 0, W, H);
+  // Возвращаем яркость: умножение затемняет, и дом уходил бы в грязь.
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = tint * 0.45;
+  ctx.fillStyle = hex(color);
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  return true;
+}
+
 /** Фасад панельного дома: швы между плитами, окна, балконы. */
 export function panelFacade(baseColor = 0xc9c3b4, withBalcony = true) {
   const key = `panel-${baseColor}-${withBalcony}`;
@@ -49,6 +107,7 @@ export function panelFacade(baseColor = 0xc9c3b4, withBalcony = true) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = hex(baseColor);
   ctx.fillRect(0, 0, W, H);
+  wallPhoto(ctx, W, H, 'concrete', baseColor, 2, 0.62);
 
   // Швы плит.
   ctx.strokeStyle = 'rgba(0,0,0,0.22)';
@@ -138,8 +197,9 @@ export function khrushchevkaFacade(baseColor = 0xd8d3c0, brick = true) {
   const base = new THREE.Color(baseColor);
   ctx.fillStyle = hex(baseColor);
   ctx.fillRect(0, 0, W, H);
+  const khrushPhoto = wallPhoto(ctx, W, H, brick ? 'brickWhite' : 'concrete', baseColor, brick ? 3 : 2, 0.58);
 
-  if (brick) {
+  if (brick && !khrushPhoto) {
     // Силикатная кладка: кирпич крупный, шов светлый.
     const bh = 8;
     const bw = 22;
@@ -151,7 +211,7 @@ export function khrushchevkaFacade(baseColor = 0xd8d3c0, brick = true) {
         ctx.fillRect(x + off + 1, y + 1, bw - 2, bh - 2);
       }
     }
-  } else {
+  } else if (!khrushPhoto) {
     // Панельный вариант: швы плит по два этажа.
     ctx.strokeStyle = 'rgba(0,0,0,0.2)';
     ctx.lineWidth = 2;
@@ -236,6 +296,7 @@ export function series125Facade(baseColor = 0xc6c2b2, accent = 0x8fa2a8) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = hex(baseColor);
   ctx.fillRect(0, 0, W, H);
+  wallPhoto(ctx, W, H, 'concrete', baseColor, 2, 0.6);
 
   // Рустованная фактура панели — мелкая вертикальная бороздка.
   ctx.strokeStyle = 'rgba(0,0,0,0.05)';
@@ -316,6 +377,7 @@ export function stalinkaFacade(baseColor = 0xd9b26a) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = hex(baseColor);
   ctx.fillRect(0, 0, W, H);
+  wallPhoto(ctx, W, H, 'plasterWarm', baseColor, 2, 0.55);
 
   for (let f = 0; f < 2; f++) {
     const y0 = f * (H / 2);
@@ -375,6 +437,7 @@ export function flemishFacade(baseColor = 0xa8443a) {
   const base = new THREE.Color(baseColor);
   ctx.fillStyle = hex(baseColor);
   ctx.fillRect(0, 0, W, H);
+  wallPhoto(ctx, W, H, 'brickFace', baseColor, 3, 0.55);
 
   // Кирпичная кладка со смещением рядов.
   const brickH = 9;
@@ -626,6 +689,7 @@ export function factoryFacade(baseColor = 0x9b8f80) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = hex(baseColor);
   ctx.fillRect(0, 0, W, H);
+  wallPhoto(ctx, W, H, 'brickRed', baseColor, 2, 0.5);
   ctx.strokeStyle = 'rgba(0,0,0,0.12)';
   ctx.lineWidth = 2;
   for (let x = 0; x < W; x += 16) {
@@ -659,6 +723,7 @@ export function privateFacade(baseColor = 0x8fa07a) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = hex(baseColor);
   ctx.fillRect(0, 0, W, H);
+  wallPhoto(ctx, W, H, 'wood', baseColor, 2, 0.55);
   ctx.strokeStyle = 'rgba(0,0,0,0.15)';
   ctx.lineWidth = 2;
   for (let y = 0; y < H; y += 10) {
