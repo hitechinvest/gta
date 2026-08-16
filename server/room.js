@@ -306,10 +306,14 @@ export class Room {
   onState(client, m) {
     if (!client.joined) return;
     if (typeof m.x !== 'number' || !Number.isFinite(m.x)) return;
-    const lim = CONFIG.total;
-    client.x = Math.max(-lim, Math.min(lim, m.x));
+    // Границы берём у самого мира: у реального центра они шире квартальной
+    // сетки, и по её размеру чужие игроки прилипали к линии z = 520.
+    const bounds = this.world.bounds || { min: -CONFIG.total, max: CONFIG.total };
+    const lo = bounds.min - 20;
+    const hi = bounds.max + 20;
+    client.x = Math.max(lo, Math.min(hi, m.x));
     client.y = Math.max(-5, Math.min(200, m.y || 0));
-    client.z = Math.max(-lim, Math.min(lim, m.z));
+    client.z = Math.max(lo, Math.min(hi, m.z));
     client.yaw = m.r || 0;
     client.pitch = m.p || 0;
     client.anim = typeof m.a === 'string' ? m.a.slice(0, 12) : 'idle';
