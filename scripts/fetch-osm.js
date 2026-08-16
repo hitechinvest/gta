@@ -25,6 +25,9 @@ const OUT = argValue('out', 'shared/city-osm.json');
 const ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.osm.jp/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
 // Перевод градусов в метры: на таком масштабе плоской проекции достаточно.
@@ -159,6 +162,10 @@ for (const el of data.elements) {
       h: +h.toFixed(1),
       k: buildingKind(tags, h),
       n: tags.name || tags['name:ru'] || '',
+      // Адрес: улица и номер дома — то, чем город подписан в реальности.
+      st: tags['addr:street'] || '',
+      hn: tags['addr:housenumber'] || '',
+      am: tags.amenity || tags.shop || tags.office || tags.tourism || '',
       l: parseInt(tags['building:levels'], 10) || 0,
     });
   } else if (tags.highway) {
@@ -192,6 +199,7 @@ mkdirSync(resolve(ROOT, dirname(OUT)), { recursive: true });
 writeFileSync(resolve(ROOT, OUT), JSON.stringify(out));
 
 const named = buildings.filter((b) => b.n).length;
-console.log(`[osm] здания: ${buildings.length} (с названиями: ${named})`);
+const addressed = buildings.filter((b) => b.hn).length;
+console.log(`[osm] здания: ${buildings.length} (с названиями: ${named}, с адресами: ${addressed})`);
 console.log(`[osm] дороги: ${roads.length}, вода: ${water.length}, зелень: ${green.length}`);
 console.log(`[osm] сохранено в ${OUT}`);

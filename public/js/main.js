@@ -5,6 +5,8 @@ import {
 } from '/shared/worldgen.js';
 import { WEAPONS, NET, PICKUP_TYPES } from '/shared/protocol.js';
 import { buildCity } from './city.js';
+import { buildOsmCity } from './osmcity.js';
+import { generateOsmWorld } from '/shared/osmworld.js';
 import { LocalPlayer } from './player.js';
 import { VehicleEntity } from './vehicle.js';
 import { RemotePlayer } from './remote.js';
@@ -129,11 +131,23 @@ async function start(name, skin) {
 
   game.myId = init.id;
   game.serverOffset = init.serverTime - Date.now();
-  game.world = generateWorld(init.seed);
+  // Сервер сообщает, по какому миру играем: реальному или процедурному.
+  let osmData = null;
+  if (init.osm) {
+    loadingText.textContent = 'Загружаем карту города…';
+    try {
+      osmData = await (await fetch('/shared/city-osm.json')).json();
+    } catch (err) {
+      console.warn('карта OSM не загрузилась:', err);
+    }
+  }
+  game.world = osmData ? generateOsmWorld(osmData) : generateWorld(init.seed);
 
   game.quality = detectQuality();
   setupScene();
-  game.city = buildCity(game.scene, game.world, game.quality);
+  game.city = osmData
+    ? buildOsmCity(game.scene, game.world, game.quality)
+    : buildCity(game.scene, game.world, game.quality);
 
   game.effects = new Effects(game.scene);
   game.peds = new Peds(game.scene, game.world);
@@ -880,6 +894,7 @@ function update(dt) {
   }
 
   // Прохожие и эффекты.
+  game.city.update?.(dt, game.camera);
   game.peds.update(dt, player.x, player.z);
   game.effects.update(dt);
   updatePickups(dt);

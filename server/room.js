@@ -1,9 +1,28 @@
 // Игровая комната: состояние мира, синхронизация игроков, транспорт,
 // ИИ патрулей ДПС, розыск, урон и подборы.
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   generateWorld, snapToRoad, resolveCircle, raycastBuildings, roadCenter, CONFIG,
 } from '../shared/worldgen.js';
+import { generateOsmWorld } from '../shared/osmworld.js';
+
+const OSM_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../shared/city-osm.json');
+
+/** Реальный центр Йошкар-Олы, если выгрузка лежит рядом; иначе — генератор. */
+function loadWorld(seed) {
+  if (process.env.CITY === 'procedural' || !fs.existsSync(OSM_FILE)) return generateWorld(seed);
+  try {
+    const world = generateOsmWorld(JSON.parse(fs.readFileSync(OSM_FILE, 'utf8')));
+    console.log(`[мир] реальный центр из OSM: ${world.buildings.length} зданий`);
+    return world;
+  } catch (err) {
+    console.error('[мир] OSM не прочитался, строим процедурный:', err.message);
+    return generateWorld(seed);
+  }
+}
 import {
   NET, WEAPONS, VEHICLES, VEHICLE_ORDER, WANTED, PLAYER, PICKUP_TYPES,
   clampName, sanitizeChat, RESPAWN_TIME,
@@ -20,7 +39,7 @@ const uid = (prefix) => `${prefix}${(nextEntityId++).toString(36)}`;
 export class Room {
   constructor(seed = Math.floor(Math.random() * 1e9)) {
     this.seed = seed >>> 0;
-    this.world = generateWorld(this.seed);
+    this.world = loadWorld(this.seed);
     this.clients = new Map(); // id -> client
     this.vehicles = new Map();
     this.npcs = new Map();
@@ -213,6 +232,7 @@ export class Room {
       t: 'init',
       id: client.id,
       seed: this.seed,
+      osm: !!this.world.osm,
       you: this.publicPlayer(client),
       players: [...this.clients.values()].filter((c) => c.joined && c.id !== client.id).map((c) => this.publicPlayer(c)),
       vehicles: [...this.vehicles.values()].map((v) => this.publicVehicle(v)),
