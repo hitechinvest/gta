@@ -10,7 +10,7 @@
 Лицензии: https://creativecommons.org/licenses/by-sa/4.0/deed.ru
 и https://creativecommons.org/licenses/by/4.0/deed.ru
 
-Всего снимков: 21.
+Всего снимков: 22.
 
 | Дом | Файл | Автор | Лицензия | Страница снимка |
 |---|---|---|---|---|
@@ -35,3 +35,4 @@
 | общий фасад (stalinka) | `главпочтамт-г-йошкар-ола.jpg` | Kublitskayaya | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%93%D0%BB%D0%B0%D0%B2%D0%BF%D0%BE%D1%87%D1%82%D0%B0%D0%BC%D1%82_%D0%B3._%D0%99%D0%BE%D1%88%D0%BA%D0%B0%D1%80-%D0%9E%D0%BB%D0%B0.JPG |
 | общий фасад (stalinka) | `дом-земского-исправника-адрес-вознесенская-49.jpg` | Kublitskayaya | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%94%D0%BE%D0%BC_%D0%97%D0%B5%D0%BC%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D0%B8%D1%81%D0%BF%D1%80%D0%B0%D0%B2%D0%BD%D0%B8%D0%BA%D0%B0,_%D0%B0%D0%B4%D1%80%D0%B5%D1%81_%D0%92%D0%BE%D0%B7%D0%BD%D0%B5%D1%81%D0%B5%D0%BD%D1%81%D0%BA%D0%B0%D1%8F_49.JPG |
 | общий фасад (stalinka) | `главпочтампт-йошкар-ола.jpg` | Andrew AGZ | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%93%D0%BB%D0%B0%D0%B2%D0%BF%D0%BE%D1%87%D1%82%D0%B0%D0%BC%D0%BF%D1%82,_%D0%99%D0%BE%D1%88%D0%BA%D0%B0%D1%80-%D0%9E%D0%BB%D0%B0.JPG |
+| общий фасад (stalinka) | `дом-пчелина.jpg` | X3nus | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%94%D0%BE%D0%BC_%D0%9F%D1%87%D0%B5%D0%BB%D0%B8%D0%BD%D0%B0.jpg |
