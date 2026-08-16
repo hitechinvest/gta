@@ -10,7 +10,7 @@
 Лицензии: https://creativecommons.org/licenses/by-sa/4.0/deed.ru
 и https://creativecommons.org/licenses/by/4.0/deed.ru
 
-Всего снимков: 23.
+Всего снимков: 24.
 
 | Дом | Файл | Автор | Лицензия | Страница снимка |
 |---|---|---|---|---|
@@ -37,3 +37,4 @@
 | общий фасад (stalinka) | `главпочтампт-йошкар-ола.jpg` | Andrew AGZ | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%93%D0%BB%D0%B0%D0%B2%D0%BF%D0%BE%D1%87%D1%82%D0%B0%D0%BC%D0%BF%D1%82,_%D0%99%D0%BE%D1%88%D0%BA%D0%B0%D1%80-%D0%9E%D0%BB%D0%B0.JPG |
 | общий фасад (stalinka) | `дом-пчелина.jpg` | X3nus | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%94%D0%BE%D0%BC_%D0%9F%D1%87%D0%B5%D0%BB%D0%B8%D0%BD%D0%B0.jpg |
 | общий фасад (stalinka) | `дом-пчелина-с-территории-вознесенской-церкви.jpg` | X3nus | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%94%D0%BE%D0%BC_%D0%9F%D1%87%D0%B5%D0%BB%D0%B8%D0%BD%D0%B0_%D1%81_%D1%82%D0%B5%D1%80%D1%80%D0%B8%D1%82%D0%BE%D1%80%D0%B8%D0%B8_%D0%92%D0%BE%D0%B7%D0%BD%D0%B5%D1%81%D0%B5%D0%BD%D1%81%D0%BA%D0%BE%D0%B9_%D1%86%D0%B5%D1%80%D0%BA%D0%B2%D0%B8.jpg |
+| общий фасад (panel) | `view-on-nagorny-microdistrict-from-kirova-street-yoshkar-ola-mari-el-republic-russia.jpg` | Konstantin Pečaļka | CC BY 3.0 | https://commons.wikimedia.org/wiki/File:View_on_Nagorny_microdistrict_from_Kirova_street,_Yoshkar-Ola,_Mari_El_Republic,_Russia.jpg |
