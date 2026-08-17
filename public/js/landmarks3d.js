@@ -158,7 +158,10 @@ function turrets(box, height) {
     [box.minX + r, box.maxZ - r], [box.maxX - r, box.maxZ - r],
   ];
   for (const [x, z] of corners) {
-    const h = height + 6;
+    // Башенка чуть выше карниза. Высоту дома берём с потолком: у театра
+    // кукол секции разной этажности, и по самой высокой башни выходили
+    // втрое выше самого замка.
+    const h = Math.min(height, 16) + 6;
     const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 12), wallMat);
     body.position.set(x, h / 2, z);
     body.castShadow = true;

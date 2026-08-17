@@ -52,6 +52,7 @@ const QUERY = `
   way["natural"="water"](${BBOX});
   way["waterway"="riverbank"](${BBOX});
   relation["natural"="water"]["type"="multipolygon"](${BBOX});
+  way["building:part"](${BBOX});
   way["historic"="castle"](${BBOX});
   way["barrier"="city_wall"](${BBOX});
   way["leisure"~"^(park|garden|pitch|playground)$"](${BBOX});
@@ -229,6 +230,10 @@ const green = [];
 // Крепостные стены: в OSM у кремля есть контур, но нет ни одного здания,
 // поэтому по этому контуру мы потом узнаём его стены и башни.
 const sights = [];
+// Части зданий по схеме Simple 3D Buildings: у дома с башней и стилобатом
+// в OSM размечена каждая секция со своей этажностью. Без них силуэт любого
+// такого дома — одна коробка по внешнему контуру.
+const parts = [];
 
 for (const el of data.elements) {
   const tags = el.tags || {};
@@ -251,6 +256,23 @@ for (const el of data.elements) {
   const last = pts[pts.length - 1];
   const closed = Math.abs(first[0] - last[0]) < 0.5 && Math.abs(first[1] - last[1]) < 0.5;
   if (closed) pts.pop();
+
+  if (tags['building:part'] && !tags.building) {
+    if (pts.length < 3 || area(pts) < 8) continue;
+    const h = buildingHeight({ ...tags, building: tags['building:part'] });
+    parts.push({
+      p: pts,
+      h: +h.toFixed(1),
+      // Нижняя отметка: у арок и переходов секция начинается не с земли.
+      mh: +(parseFloat(tags.min_height) || (parseFloat(tags['building:min_level']) || 0) * 3.1).toFixed(1),
+      rs: tags['roof:shape'] || '',
+      rl: parseFloat(tags['roof:levels']) || 0,
+      rc: colorTag(tags['roof:colour']),
+      bc: colorTag(tags['building:colour']),
+      l: parseInt(tags['building:levels'], 10) || 0,
+    });
+    continue;
+  }
 
   if (tags.building) {
     if (pts.length < 3 || area(pts) < 12) continue; // сараи и будки пропускаем
@@ -302,6 +324,7 @@ const out = {
   water,
   green,
   sights,
+  parts,
 };
 
 mkdirSync(resolve(ROOT, dirname(OUT)), { recursive: true });
@@ -310,5 +333,5 @@ writeFileSync(resolve(ROOT, OUT), JSON.stringify(out));
 const named = buildings.filter((b) => b.n).length;
 const addressed = buildings.filter((b) => b.hn).length;
 console.log(`[osm] здания: ${buildings.length} (с названиями: ${named}, с адресами: ${addressed})`);
-console.log(`[osm] дороги: ${roads.length}, вода: ${water.length}, зелень: ${green.length}, ориентиры: ${sights.length}`);
+console.log(`[osm] дороги: ${roads.length}, вода: ${water.length}, зелень: ${green.length}, ориентиры: ${sights.length}, секции зданий: ${parts.length}`);
 console.log(`[osm] сохранено в ${OUT}`);

@@ -49,6 +49,67 @@ function polyArea(points) {
   return Math.abs(a / 2);
 }
 
+
+/** Точка внутри контура — по ней секции дома привязываются к дому. */
+function inPoly(x, z, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i];
+    const [xj, zj] = poly[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Раскладывает секции building:part по домам. В OSM у дома со стилобатом и
+ * башней размечена каждая секция со своей этажностью, и без этой раскладки
+ * такой дом рисуется одной коробкой по внешнему контуру.
+ */
+function attachParts(buildings, rawParts) {
+  if (!rawParts || !rawParts.length) return;
+  const index = new Map();
+  const CELL = 120;
+  buildings.forEach((b, i) => {
+    const key = `${Math.floor(b.x / CELL)}:${Math.floor(b.z / CELL)}`;
+    let cell = index.get(key);
+    if (!cell) index.set(key, cell = []);
+    cell.push(i);
+  });
+  for (const part of rawParts) {
+    if (!part.p || part.p.length < 3) continue;
+    let sx = 0; let sz = 0;
+    for (const [x, z] of part.p) { sx += x; sz += z; }
+    const cx = sx / part.p.length;
+    const cz = sz / part.p.length;
+    const gx = Math.floor(cx / CELL);
+    const gz = Math.floor(cz / CELL);
+    let host = null;
+    for (let dx = -1; dx <= 1 && !host; dx++) {
+      for (let dz = -1; dz <= 1 && !host; dz++) {
+        for (const i of index.get(`${gx + dx}:${gz + dz}`) || []) {
+          const b = buildings[i];
+          if (Math.abs(cx - b.x) > b.w / 2 + 2 || Math.abs(cz - b.z) > b.d / 2 + 2) continue;
+          if (!inPoly(cx, cz, b.poly)) continue;
+          host = b;
+          break;
+        }
+      }
+    }
+    if (!host) continue;
+    (host.parts || (host.parts = [])).push({
+      poly: part.p,
+      h: part.h,
+      minH: part.mh || 0,
+      roof: part.rs || '',
+      roofLevels: part.rl || 0,
+      roofColor: part.rc || 0,
+      area: polyArea(part.p),
+    });
+    if (part.h > host.h) host.h = part.h;
+  }
+}
+
 let cached = null;
 let osm = null;
 
@@ -116,6 +177,8 @@ export function generateOsmWorld(data) {
       features: {},
     });
   }
+
+  attachParts(buildings, osm.parts);
 
   // Точки спавна: вдоль проезжих улиц, подальше от домов.
   const carSpawns = [];

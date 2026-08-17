@@ -587,37 +587,62 @@ export function buildOsmCity(scene, world, quality = 'high') {
       // У башен OSM даёт высоту по умолчанию — двенадцать метров; настоящую
       // подставляет стиль ориентира.
       const height = (style && style.height) || b.h;
-      const shape = new THREE.Shape(b.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
-      const geo = new THREE.ExtrudeGeometry(shape, {
-        depth: height, bevelEnabled: false, curveSegments: 1,
-      });
-      // Выдавливание нумерует вертикальную координату UV как «единица минус
-      // высота», поэтому фасад вставал вверх ногами: фотографии домов висели
-      // крышей вниз, а у процедурных стен цоколь оказывался под карнизом.
-      // Возвращаем V прямой отсчёт в метрах от земли.
-      const uv = geo.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
 
-      // Выдавливание идёт по +Z: разворачиваем контур в горизонталь.
-      geo.rotateX(-Math.PI / 2);
-      bakeAO(geo);
-      byMaterial.get(key).geos.push(geo);
+      // Секции building:part: у дома со стилобатом и башней каждая часть
+      // своей высоты. Если секции закрывают дом почти целиком, общий объём
+      // по внешнему контуру не строим — он был бы коробкой поверх формы.
+      const parts = b.parts && b.parts.length && !(style && style.height) ? b.parts : null;
+      const covered = parts ? parts.reduce((sum, p) => sum + p.area, 0) / b.area : 0;
+      const volumes = [];
+      if (!parts || covered < 0.55) {
+        volumes.push({
+          poly: b.poly, top: height, base: 0, roof: b.roof, roofLevels: b.roofLevels,
+          roofColor: (style && style.roofColor) || b.roofColor,
+        });
+      }
+      for (const part of parts || []) {
+        volumes.push({
+          poly: part.poly, top: part.h, base: part.minH, roof: part.roof,
+          roofLevels: part.roofLevels, roofColor: part.roofColor || b.roofColor,
+        });
+      }
 
-      // Плита кровли, чтобы сверху не смотрел фасад.
-      const roof = new THREE.Shape(b.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
-      const roofGeo = new THREE.ExtrudeGeometry(roof, { depth: 0.35, bevelEnabled: false, curveSegments: 1 });
-      roofGeo.rotateX(-Math.PI / 2);
-      roofGeo.translate(0, height + 0.35, 0);
-      pushRoof(roofGeo, (style && style.roofColor) || b.roofColor);
+      for (const v of volumes) {
+        const depth = Math.max(1, v.top - v.base);
+        const shape = new THREE.Shape(v.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+        const geo = new THREE.ExtrudeGeometry(shape, {
+          depth, bevelEnabled: false, curveSegments: 1,
+        });
+        // Выдавливание нумерует вертикальную координату UV как «единица минус
+        // высота», поэтому фасад вставал вверх ногами: фотографии домов висели
+        // крышей вниз, а у процедурных стен цоколь оказывался под карнизом.
+        // Возвращаем V прямой отсчёт в метрах от земли.
+        const uv = geo.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i) + v.base);
 
-      // Скатная кровля поверх плиты, если форма известна из OSM.
-      const roofShape = ROOF_SHAPES[b.roof];
-      if (roofShape) {
-        const rise = b.roofLevels
-          ? b.roofLevels * 2.6
-          : Math.min(6.5, Math.max(1.8, Math.min(b.w, b.d) * roofShape.rise));
-        const pitched = pitchedRoof(b.poly, b.roof, height + 0.35, rise);
-        if (pitched) pushRoof(pitched, b.roofColor || DEFAULT_ROOF_COLOR);
+        // Выдавливание идёт по +Z: разворачиваем контур в горизонталь.
+        geo.rotateX(-Math.PI / 2);
+        if (v.base) geo.translate(0, v.base, 0);
+        bakeAO(geo);
+        byMaterial.get(key).geos.push(geo);
+
+        // Плита кровли, чтобы сверху не смотрел фасад.
+        const roof = new THREE.Shape(v.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+        const roofGeo = new THREE.ExtrudeGeometry(roof, { depth: 0.35, bevelEnabled: false, curveSegments: 1 });
+        roofGeo.rotateX(-Math.PI / 2);
+        roofGeo.translate(0, v.top + 0.35, 0);
+        pushRoof(roofGeo, v.roofColor);
+
+        // Скатная кровля поверх плиты, если форма известна из OSM.
+        const roofShape = ROOF_SHAPES[v.roof];
+        if (roofShape) {
+          const box = { w: b.w, d: b.d };
+          const rise = v.roofLevels
+            ? v.roofLevels * 2.6
+            : Math.min(6.5, Math.max(1.8, Math.min(box.w, box.d) * roofShape.rise));
+          const pitched = pitchedRoof(v.poly, v.roof, v.top + 0.35, rise);
+          if (pitched) pushRoof(pitched, v.roofColor || DEFAULT_ROOF_COLOR);
+        }
       }
     } catch {
       // Кривой контур из OSM — пропускаем дом, чтобы не ронять сборку.
