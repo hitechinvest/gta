@@ -7,7 +7,9 @@ import { VEHICLE_ORDER, VEHICLES } from '/shared/protocol.js';
 import { VehicleEntity } from './vehicle.js';
 import { nearestRoad } from '/shared/osmworld.js';
 
-const MAX_CARS = 14;
+// Половина машин в кадре должна стоять у обочины, чтобы было что угонять:
+// движущийся поток держим чуть меньше, чем парковку (её наполняет сервер).
+const MAX_CARS = 10;
 const SPAWN_MIN = 60;
 const SPAWN_MAX = 150;
 const CELL = 96; // сторона ячейки индекса улиц

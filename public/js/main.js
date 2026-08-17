@@ -360,6 +360,15 @@ function bindNetEvents() {
       veh.driver = v.dr;
       veh.health = v.hp;
       if (v.dr !== game.myId) veh.pushNetState(v, t);
+      // Брошенную машину клиент только докатывает по инерции и сетевые
+      // состояния для неё не разбирает, поэтому переставленную сервером
+      // машину ставим на место сразу, без интерполяции.
+      if (!v.dr && Math.hypot(veh.x - v.x, veh.z - v.z) > 3) {
+        veh.buffer.length = 0;
+        veh.x = v.x; veh.y = v.y || 0; veh.z = v.z; veh.yaw = v.r;
+        veh.vx = 0; veh.vz = 0; veh.speed = 0;
+        veh.syncMesh();
+      }
       if (v.hp <= 0 && !veh.destroyed) veh.setDestroyed(game.effects);
     }
 

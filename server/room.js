@@ -62,10 +62,14 @@ export class Room {
   spawnVehicles() {
     const spots = this.world.carSpawns;
     const rngSeq = (i) => ((Math.sin(i * 12.9898 + this.seed * 0.0001) * 43758.5453) % 1 + 1) % 1;
-    const step = Math.max(1, Math.floor(spots.length / 54));
+    // На карте полтора километра радиусом полсотни машин теряются: игрок
+    // проходит квартал и не встречает ни одной. Держим по машине примерно
+    // на каждую двадцатую точку у обочины.
+    const want = this.world.osm ? 120 : 54;
+    const step = Math.max(1, Math.floor(spots.length / want));
     let k = 0;
     for (let i = 0; i < spots.length; i += step) {
-      const s = spots[i];
+      const s = this.curbSpot(spots[i]);
       const rv = rngSeq(i);
       const type = rv < 0.06 ? 'dps' : VEHICLE_ORDER[Math.floor(rngSeq(i + 7) * VEHICLE_ORDER.length)];
       const def = VEHICLES[type];
@@ -85,8 +89,24 @@ export class Room {
         home: { x: s.x, z: s.z, yaw: s.yaw },
       });
       k++;
-      if (k > 60) break;
+      if (k > want + 6) break;
     }
+  }
+
+  /**
+   * Точки спавна лежат на осевой линии улицы, а машина должна стоять у
+   * обочины: иначе брошенный «Жигуль» перекрывает полосу и в него влетает
+   * весь поток. Сдвигаем поперёк улицы в ту сторону, где свободно.
+   */
+  curbSpot(s) {
+    const nx = Math.cos(s.yaw);
+    const nz = -Math.sin(s.yaw);
+    for (const side of [1, -1]) {
+      const x = s.x + nx * 3.4 * side;
+      const z = s.z + nz * 3.4 * side;
+      if (isFree(this.world, x, z, 1.6)) return { x, z, yaw: s.yaw };
+    }
+    return { x: s.x, z: s.z, yaw: s.yaw };
   }
 
   spawnPickups() {
@@ -836,6 +856,7 @@ export class Room {
 
     this.updateCops(dt);
     this.checkRunOver();
+    this.restockParking(dt);
 
     // Снапшот: игроки, активный транспорт, ДПС.
     const players = [];
@@ -859,6 +880,85 @@ export class Room {
     const npcs = [...this.npcs.values()].map((n) => this.publicNpc(n));
 
     this.broadcast({ t: 'snap', s: t, pl: players, vh: vehicles, np: npcs });
+  }
+
+  /**
+   * Подвоз стоящих машин поближе к игрокам. Даже сто двадцать машин на
+   * весь центр — это одна на квартал, и угонять оказывалось нечего.
+   * Поэтому машину, которую никто не видит и не водит, переставляем на
+   * свободное место у обочины рядом с тем, кому её не хватает.
+   */
+  restockParking(dt) {
+    this.parkTimer = (this.parkTimer || 0) - dt;
+    if (this.parkTimer > 0) return;
+    this.parkTimer = 2;
+    if (!this.world.carSpawns.length) return;
+
+    const NEAR = 190; // радиус, в котором машина считается доступной
+    const FAR = 420; // дальше этого машину не видит ни один игрок
+    const WANT = 12; // столько стоящих машин держим рядом с каждым
+
+    const parked = [...this.vehicles.values()]
+      .filter((v) => !v.driver && v.health > 0 && Math.abs(v.speed) < 0.3);
+
+    for (const c of this.clients.values()) {
+      if (!c.joined || c.deadUntil > now()) continue;
+      const near = parked.filter((v) => Math.hypot(v.x - c.x, v.z - c.z) < NEAR);
+      let missing = WANT - near.length;
+      if (missing <= 0) continue;
+
+      const spare = parked.filter((v) => [...this.clients.values()]
+        .every((o) => Math.hypot(v.x - o.x, v.z - o.z) > FAR));
+      for (const v of spare) {
+        if (missing <= 0) break;
+        const spot = this.freeCurbSpot(c.x, c.z);
+        if (!spot) continue;
+        v.x = spot.x; v.z = spot.z; v.yaw = spot.yaw;
+        v.speed = 0; v.vx = 0; v.vz = 0;
+        v.home = { x: spot.x, z: spot.z, yaw: spot.yaw };
+        // Помечаем свежей: иначе снапшот пропустит её как неподвижную и
+        // клиент оставит машину на старом месте.
+        v.lastUpdate = now();
+        missing--;
+      }
+    }
+  }
+
+  /**
+   * Свободное место у обочины в кольце вокруг точки. Тысяча мест разбросана
+   * по всему городу, поэтому слепой перебор почти всегда мазал мимо кольца:
+   * держим их разложенными по ячейкам.
+   */
+  freeCurbSpot(cx, cz) {
+    if (!this.spotGrid) {
+      this.spotGrid = new Map();
+      for (const s of this.world.carSpawns) {
+        const key = `${Math.floor(s.x / 96)}:${Math.floor(s.z / 96)}`;
+        let cell = this.spotGrid.get(key);
+        if (!cell) this.spotGrid.set(key, cell = []);
+        cell.push(s);
+      }
+    }
+    const candidates = [];
+    const gx = Math.floor(cx / 96);
+    const gz = Math.floor(cz / 96);
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const cell = this.spotGrid.get(`${gx + dx}:${gz + dz}`);
+        if (cell) candidates.push(...cell);
+      }
+    }
+    for (let tries = 0; tries < 30 && candidates.length; tries++) {
+      const s = candidates[Math.floor(Math.random() * candidates.length)];
+      const d = Math.hypot(s.x - cx, s.z - cz);
+      if (d < 25 || d > 130) continue;
+      let busy = false;
+      for (const v of this.vehicles.values()) {
+        if (Math.hypot(v.x - s.x, v.z - s.z) < 9) { busy = true; break; }
+      }
+      if (!busy) return this.curbSpot(s);
+    }
+    return null;
   }
 
   checkRunOver() {
