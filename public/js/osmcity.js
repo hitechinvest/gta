@@ -591,6 +591,13 @@ export function buildOsmCity(scene, world, quality = 'high') {
       const geo = new THREE.ExtrudeGeometry(shape, {
         depth: height, bevelEnabled: false, curveSegments: 1,
       });
+      // Выдавливание нумерует вертикальную координату UV как «единица минус
+      // высота», поэтому фасад вставал вверх ногами: фотографии домов висели
+      // крышей вниз, а у процедурных стен цоколь оказывался под карнизом.
+      // Возвращаем V прямой отсчёт в метрах от земли.
+      const uv = geo.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+
       // Выдавливание идёт по +Z: разворачиваем контур в горизонталь.
       geo.rotateX(-Math.PI / 2);
       bakeAO(geo);
