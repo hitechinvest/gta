@@ -499,7 +499,7 @@ function processPhoto(img, name, debug, maxFloors = 10) {
   const darkShare = dark / (out.w * out.h);
   const reasons = [];
   if (skyShare > 0.1) reasons.push('небо');
-  if (greenShare > 0.22) reasons.push('зелень');
+  if (greenShare > 0.13) reasons.push('зелень');
   if (darkShare < 0.03) reasons.push('нет окон');
   if (out.h < 120 || out.w < 200) reasons.push('мелко');
   const usable = reasons.length === 0;
@@ -611,6 +611,7 @@ function cmdBuild() {
       tileW: res.tileW,
       tileH: res.tileH,
       sky: res.skyShare,
+      green: res.greenShare,
       author: rec.author || '',
       license: rec.license || '',
       page: rec.page || '',
