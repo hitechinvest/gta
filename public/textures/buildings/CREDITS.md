@@ -44,3 +44,12 @@
 | общий фасад (stalinka) | `red-house-amsterdam-embankment-2-in-yoshkar-ola.jpg` | Reda Kerbush | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Red_house_Amsterdam_Embankment,_2_in_Yoshkar-Ola.jpg |
 | общий фасад (stalinka) | `общий-вид-здания-марийского-государственного-театра-им-м-шкетана.jpg` | Главархив Москвы | CC BY 4.0 | https://commons.wikimedia.org/wiki/File:%D0%9E%D0%B1%D1%89%D0%B8%D0%B9_%D0%B2%D0%B8%D0%B4_%D0%B7%D0%B4%D0%B0%D0%BD%D0%B8%D1%8F_%D0%9C%D0%B0%D1%80%D0%B8%D0%B9%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D0%B3%D0%BE%D1%81%D1%83%D0%B4%D0%B0%D1%80%D1%81%D1%82%D0%B2%D0%B5%D0%BD%D0%BD%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%B0%D1%82%D1%80%D0%B0_%D0%B8%D0%BC._%D0%9C._%D0%A8%D0%BA%D0%B5%D1%82%D0%B0%D0%BD%D0%B0.jpg |
 | общий фасад (stalinka) | `дом-в-йошкар-оле-где-жил-поэт-миклай-казаков.jpg` | Car-man08 | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:%D0%94%D0%BE%D0%BC_%D0%B2_%D0%99%D0%BE%D1%88%D0%BA%D0%B0%D1%80-%D0%9E%D0%BB%D0%B5,_%D0%B3%D0%B4%D0%B5_%D0%B6%D0%B8%D0%BB_%D0%BF%D0%BE%D1%8D%D1%82_%D0%9C%D0%B8%D0%BA%D0%BB%D0%B0%D0%B9_%D0%9A%D0%B0%D0%B7%D0%B0%D0%BA%D0%BE%D0%B2.jpg |
+
+## Производные текстуры (*.facade.jpg)
+
+Файлы `*.facade.jpg` собраны из перечисленных выше снимков инструментом
+`scripts/facade-tool.js`: у снимка обрезаны небо, дорога и поля, исправлен
+скос кадра, а сам фасад обрезан по целому числу этажей. Это производные
+работы, поэтому распространяются на условиях исходных лицензий (CC BY-SA
+и CC BY) с указанием тех же авторов; их список ведётся в `facades.json`
+рядом с каждым файлом.

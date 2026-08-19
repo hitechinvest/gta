@@ -1,6 +1,6 @@
 node_modules/
 public/vendor/
-npm-debug.log*
-.DS_Store
-*.log
-.env
+# Оригиналы фотографий и раскладка этапов: их восстанавливает
+# scripts/facade-tool.js fetch, в репозитории они не нужны.
+assets/facade-src/
+assets/facade-debug/

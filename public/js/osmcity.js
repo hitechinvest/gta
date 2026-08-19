@@ -421,6 +421,20 @@ function polygonPlane(points, y) {
   return geo;
 }
 
+/**
+ * Размер фотоплитки в метрах для конкретного дома. Пропорции снимка
+ * сохраняем — растянутая по одной оси фотография и была главной причиной
+ * «натянутой текстуры», — а высоту подгоняем под целое число повторов,
+ * чтобы верхний ряд окон заканчивался ровно под карнизом.
+ */
+function photoTile(photo, height) {
+  const baseH = photo.tileH || 12;
+  const baseW = photo.tileW || baseH * 2;
+  const repeats = Math.max(1, Math.round(height / baseH));
+  const tileH = height / repeats;
+  return [baseW * (tileH / baseH), tileH];
+}
+
 export function buildOsmCity(scene, world, quality = 'high') {
   const rich = quality !== 'low';
   const group = new THREE.Group();
@@ -542,20 +556,24 @@ export function buildOsmCity(scene, world, quality = 'high') {
     // На ориентире фотография чужого дома всё портит: у кремлёвской стены
     // не бывает пластиковых окон.
     const own = style ? null : facadePhoto(b.address);
-    const pooled = !own && !style && b.h <= 14
+    const pooled = !own && !style
       ? poolPhoto(b.kind, b.address || `${b.x.toFixed(0)}:${b.z.toFixed(0)}`)
       : null;
     const photo = own || pooled;
     const key = own
-      ? `photo-${b.address}`
-      : (pooled ? `pool-${pooled.uuid}` : (style ? `lm-${style.facade}-${style.color || b.color}` : `${b.kind}-${b.color}`));
+      ? `photo-${own.file}-${b.h.toFixed(1)}`
+      : (pooled ? `pool-${pooled.file}-${b.h.toFixed(1)}`
+        : (style ? `lm-${style.facade}-${style.color || b.color}` : `${b.kind}-${b.color}`));
     if (!byMaterial.has(key)) {
-      const tex = (photo || facadeTexture(b, style)).clone();
-      // Фотография растягивается на фасад целиком, процедурный тайл — по метрам.
-      // Снимок конкретного дома растягиваем на весь фасад, общий повторяем
-      // каждые двадцать метров: иначе окна на длинном корпусе размером с ворота.
+      const tex = (photo ? photo.texture : facadeTexture(b, style)).clone();
+      // Снимок кладётся по метрам, как и процедурный фасад: инструмент
+      // посчитал, сколько метров стены он занимает. Раньше фотография
+      // растягивалась от земли до карниза, и на девятиэтажке двухэтажный
+      // дом с фотографии превращался в окна высотой с ворота.
+      // Высоту плитки подгоняем так, чтобы в дом уложилось целое число
+      // повторов: иначе под крышей остаётся обрезанный этаж.
       const tile = photo
-        ? [own ? Math.max(b.w, b.d) : Math.min(26, Math.max(14, b.w)), b.h]
+        ? photoTile(photo, b.h)
         : (style ? (LANDMARK_TILE[style.facade] || [6.4, 5.8]) : (FACADE_TILE[b.kind] || [6.4, 5.8]));
       // Выдавливание нумерует UV в метрах, поэтому масштаб задаём повтором.
       tex.repeat.set(1 / tile[0], 1 / tile[1]);

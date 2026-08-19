@@ -109,22 +109,34 @@ export async function loadFacadePhotos(base = '/textures/buildings/') {
   facadePhotos = new Map();
   facadePool = [];
   try {
-    const res = await fetch(`${base}manifest.json`, { cache: 'no-cache' });
-    if (!res.ok) throw new Error(String(res.status));
-    const manifest = await res.json();
+    // facades.json собирает scripts/facade-tool.js: снимки уже обрезаны по
+    // фасаду и несут размер плитки в метрах. Старый manifest.json остаётся
+    // запасным вариантом — по нему снимок просто натягивается на дом.
+    let data = null;
+    let metric = true;
+    let res = await fetch(`${base}facades.json`, { cache: 'no-cache' });
+    if (res.ok) data = await res.json();
+    else {
+      metric = false;
+      res = await fetch(`${base}manifest.json`, { cache: 'no-cache' });
+      if (!res.ok) throw new Error(String(res.status));
+      data = await res.json();
+    }
+
     const load = (rec) => new Promise((done) => {
+      if (metric && rec.usable === false) { done(null); return; }
       const img = new Image();
-      img.onload = () => done({ ...rec, img });
+      img.onload = () => done({ ...rec, img, metric });
       img.onerror = () => done(null);
       img.src = base + rec.file;
     });
 
     const byAddress = await Promise.all(
-      Object.entries(manifest.byAddress || {}).map(async ([address, rec]) => [address, await load(rec)]),
+      Object.entries(data.byAddress || {}).map(async ([address, rec]) => [address, await load(rec)]),
     );
     for (const [address, rec] of byAddress) if (rec) facadePhotos.set(address, rec);
 
-    const pool = await Promise.all((manifest.pool || []).map(load));
+    const pool = await Promise.all((data.pool || []).map(load));
     facadePool = pool.filter(Boolean);
     console.info(`[текстуры] фото домов: ${facadePhotos.size} адресных, ${facadePool.length} общих`);
   } catch {
@@ -145,15 +157,23 @@ function hashKey(str) {
 
 function textureFor(rec) {
   const key = `facade-${rec.file}`;
-  if (cache.has(key)) return cache.get(key);
-  const c = canvas(rec.img.width, rec.img.height);
-  c.getContext('2d').drawImage(rec.img, 0, 0);
-  const tex = toTexture(c);
-  cache.set(key, tex);
-  return tex;
+  if (!cache.has(key)) {
+    const c = canvas(rec.img.width, rec.img.height);
+    c.getContext('2d').drawImage(rec.img, 0, 0);
+    cache.set(key, toTexture(c));
+  }
+  // Вместе с текстурой отдаём её размер в метрах: без него дом снова
+  // растянет снимок от земли до карниза, и окна поедут.
+  return {
+    texture: cache.get(key),
+    file: rec.file,
+    tileW: rec.tileW || 0,
+    tileH: rec.tileH || 0,
+    floors: rec.floors || 0,
+  };
 }
 
-/** Текстура фасада для дома с таким адресом, если его фотографировали. */
+/** Фасад дома с таким адресом, если его фотографировали. */
 export function facadePhoto(address) {
   const rec = address && facadePhotos?.get(address);
   return rec ? textureFor(rec) : null;
